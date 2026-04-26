@@ -8,6 +8,7 @@ pub mod adaptive_timing;
 pub mod cache_status;
 pub mod connection;
 pub mod dash_files;
+pub mod dash_layout;
 pub mod debug_realtime;
 pub mod realtime_get;
 pub mod annotations;

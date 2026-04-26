@@ -1,7 +1,8 @@
 //! Dashboard file IO commands: load/save/rename/duplicate/delete + validate + create.
 
 use crate::paths::{get_dashboards_dir, get_projects_dir};
-use crate::{convert_dashfile_to_layout, generate_unique_filename};
+use crate::commands::dash_layout::generate_unique_filename;
+use crate::convert_dashfile_to_layout;
 use libretune_core::dash::{
     self, create_basic_dashboard, create_racing_dashboard, create_tuning_dashboard, DashComponent,
     DashFile, VersionInfo,
