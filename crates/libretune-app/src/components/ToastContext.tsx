@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useCallback, ReactNode, useRef } from 'react';
 import './ToastContext.css';
 
-type ToastType = 'success' | 'warning' | 'error' | 'info';
+export type ToastType = 'success' | 'warning' | 'error' | 'info';
 
 interface Toast {
   id: number;

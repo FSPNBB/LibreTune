@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
-import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ThemeProvider, useTheme } from "./themes";
 import { initializeHotkeyManager } from "./services/hotkeyService";
@@ -28,6 +27,7 @@ import ErrorBoundary from "./components/common/ErrorBoundary";
 import { DialogOverlays } from "./components/DialogOverlays";
 import { useBackendEventListeners } from "./hooks/useBackendEventListeners";
 import { useRealtimeStream } from "./hooks/useRealtimeStream";
+import { useTabPopout } from "./hooks/useTabPopout";
 import { PinConfig } from "./components/hardware/PortEditor";
 import { useLoading } from "./components/LoadingContext";
 import { useToast } from "./components/ToastContext";
@@ -1401,133 +1401,17 @@ function AppContent() {
     setTabs(newTabs);
   }, []);
 
-  // Pop out a tab to its own window
-  const handleTabPopout = useCallback(
-    async (tabId: string) => {
-      const content = tabContents[tabId];
-      const tab = tabs.find((t) => t.id === tabId);
-      if (!content || !tab) return;
+  // Pop-out windows: handleTabPopout + tab:dock + table:updated listeners.
+  const { handleTabPopout } = useTabPopout({
+    tabs,
+    tabContents,
+    handleTabClose,
+    showToast,
+    setTabs,
+    setTabContents,
+    setActiveTabId,
+  });
 
-      // Store data in localStorage for the pop-out window to retrieve
-      const storageKey = `popout-${tabId}`;
-      localStorage.setItem(storageKey, JSON.stringify({
-        data: content.data,
-      }));
-
-      // Create the pop-out window
-      const label = `popout-${tabId.replace(/[^a-zA-Z0-9]/g, '_')}`;
-      
-      // Build URL for pop-out window
-      // Use current window's origin to ensure it works in both dev and production
-      const currentOrigin = window.location.origin;
-      const hashParams = `#/popout?tabId=${encodeURIComponent(tabId)}&type=${encodeURIComponent(content.type)}&title=${encodeURIComponent(tab.title)}`;
-      const url = `${currentOrigin}/${hashParams}`;
-      
-      console.log('[handleTabPopout] Creating window with URL:', url);
-      console.log('[handleTabPopout] Current origin:', currentOrigin);
-
-      try {
-        const webview = new WebviewWindow(label, {
-          url,
-          title: tab.title,
-          width: 900,
-          height: 700,
-          center: true,
-          decorations: true,
-          // Enable devtools for debugging
-          devtools: true,
-        });
-
-        // Wait for window to be created
-        await webview.once('tauri://created', () => {
-          console.log('Pop-out window created:', label, 'url:', url);
-        });
-
-        // Log errors for debugging
-        webview.once('tauri://error', (e) => {
-          console.error('Pop-out window error:', e);
-        });
-
-        // Remove tab from main window
-        handleTabClose(tabId);
-      } catch (e) {
-        console.error('Failed to create pop-out window:', e);
-        showToast('Failed to pop out tab: ' + e, 'error');
-        // Clean up localStorage
-        localStorage.removeItem(storageKey);
-      }
-    },
-    [tabs, tabContents, handleTabClose, showToast]
-  );
-
-  // Listen for dock events from pop-out windows
-  useEffect(() => {
-    let unlisten: UnlistenFn | null = null;
-
-    (async () => {
-      try {
-        unlisten = await listen<{
-          tabId: string;
-          type: TabContent['type'];
-          title: string;
-          data: TabContent['data'];
-        }>('tab:dock', (event) => {
-          const { tabId, type, title, data } = event.payload;
-          console.log('Tab docking back:', tabId);
-
-          // Re-add the tab
-          setTabs((prev) => {
-            if (prev.find((t) => t.id === tabId)) return prev;
-            return [...prev, { id: tabId, title, icon: type === 'table' || type === 'curve' ? 'table' : type }];
-          });
-          setTabContents((prev) => ({
-            ...prev,
-            [tabId]: { type, data },
-          }));
-          setActiveTabId(tabId);
-        });
-      } catch (e) {
-        console.error('Failed to listen for tab:dock events:', e);
-      }
-    })();
-
-    return () => {
-      if (unlisten) unlisten();
-    };
-  }, []);
-
-  // Listen for table updates from pop-out windows
-  useEffect(() => {
-    let unlisten: UnlistenFn | null = null;
-
-    (async () => {
-      try {
-        unlisten = await listen<{
-          tabId: string;
-          type: TabContent['type'];
-          data: TabContent['data'];
-        }>('table:updated', (event) => {
-          const { tabId, type, data } = event.payload;
-          // Update our local state if we have this tab
-          setTabContents((prev) => {
-            if (!prev[tabId]) return prev;
-            return {
-              ...prev,
-              [tabId]: { type, data },
-            };
-          });
-        });
-      } catch (e) {
-        console.error('Failed to listen for table:updated events:', e);
-      }
-    })();
-
-    return () => {
-      if (unlisten) unlisten();
-    };
-  }, []);
-
-  // Convert backend menus to menu bar format
   const menuItems: TunerMenuItem[] = useMemo(() => buildMenuItems({
     t, currentProject, status, ecuType, iniCapabilities, backendMenus, theme,
     sidebarVisible, tabs, openTarget, handleStdTarget, openHelpTopic, showToast,
