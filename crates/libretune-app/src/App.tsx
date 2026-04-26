@@ -15,8 +15,6 @@ import {
   SidebarNode,
   StatusItem,
   Tab,
-  TableEditor,
-  TableData as TunerTableData,
   LoggingIndicator,
   SaveDialog,
   LoadDialog,
@@ -25,17 +23,11 @@ import {
   SettingsDialog,
   AboutDialog,
   ConnectionDialog,
-  AutoTune,
-  DataLogView,
 } from "./components/tuner-ui";
 import ConnectionMetrics from './components/layout/ConnectionMetrics';
 import OnboardingDialog from './components/dialogs/OnboardingDialog';
-import TsDashboard from "./components/dashboards/TsDashboard";
-import { ToothLoggerView, CompositeLoggerView, OutputChannelStatus } from "./components/diagnostics";
-import { EcuConsole } from "./components/console/EcuConsole";
-import { LuaConsole } from "./components/console/LuaConsole";
-import DialogRenderer, { DialogDefinition as RendererDialogDef } from "./components/dialogs/DialogRenderer";
-import CurveEditor, { CurveData, SimpleGaugeInfo } from "./components/curves/CurveEditor";
+import { SimpleGaugeInfo } from "./components/curves/CurveEditor";
+import type { DialogDefinition as RendererDialogDef } from "./components/dialogs/DialogRenderer";
 import HelpViewer, { HelpTopicData } from "./components/dialogs/HelpViewer";
 import UserManualViewer from "./components/dialogs/UserManualViewer";
 import SignatureMismatchDialog, { SignatureMismatchInfo } from "./components/dialogs/SignatureMismatchDialog";
@@ -49,20 +41,19 @@ import MathChannelsDialog from "./components/dialogs/MathChannelsDialog";
 import MigrationReportDialog from "./components/dialogs/MigrationReportDialog";
 import TuneFileDiffDialog from "./components/dialogs/TuneFileDiffDialog";
 import DynoOverlay from "./components/tuner-ui/DynoOverlay";
-import WelcomeView from "./components/WelcomeView";
 import NewProjectDialog from "./components/dialogs/NewProjectDialog";
 import BaseMapDialog, { BaseMapResult } from "./components/dialogs/BaseMapDialog";
 import TuneHistoryPanel from "./components/TuneHistoryPanel";
 import ErrorDetailsDialog, { useErrorDialog } from "./components/dialogs/ErrorDetailsDialog";
 import ErrorBoundary from "./components/common/ErrorBoundary";
 import { PluginPanel } from "./components/PluginPanel";
-import PortEditor, { PinConfig } from "./components/hardware/PortEditor";
+import { PinConfig } from "./components/hardware/PortEditor";
 import { useLoading } from "./components/LoadingContext";
 import { useToast } from "./components/ToastContext";
-import { SettingsView } from "./components/SettingsView";
 import { formatError } from "./utils/formatError";
 import { ensureRealtimeListener } from "./services/realtimeListener";
 import { buildSidebarItems } from "./utils/buildSidebarItems";
+import { TabContentRouter } from "./components/TabContentRouter";
 import {
   type ConnectionStatus,
   type ConnectResult,
@@ -78,7 +69,6 @@ import {
   type BackendMenu,
   type BackendMenuItem,
   type ProtocolDefaults,
-  type PortEditorConfig,
   type TabContent,
   toTunerTableData,
   toCurveData,
@@ -2261,151 +2251,6 @@ function AppContent() {
     return items;
   }, [status.state, statusBarChannels, isLogging, logDuration, syncStatus]);
 
-  // Render tab content
-  const renderTabContent = () => {
-    // If no project is open, show the welcome view
-    if (!currentProject) {
-      return <WelcomeView 
-        projects={availableProjects}
-        onOpenProject={(path) => openProject(path)}
-        onNewProject={() => setNewProjectDialogOpen(true)}
-        onConnect={() => setConnectionDialogOpen(true)}
-        onImportTsProject={() => setImportProjectOpen(true)}
-        onDeleteProject={handleDeleteProject}
-      />;
-    }
-    
-    // No active tab selected
-    if (!activeTabId) return null;
-    
-    const content = tabContents[activeTabId];
-    if (!content) return null;
-
-    switch (content.type) {
-      case "dashboard":
-        return <TsDashboard 
-          isConnected={status.state === 'Connected'}
-        />;
-      case "table":
-        return (
-          <TableEditor
-            data={content.data as TunerTableData}
-            onChange={(newData) => {
-              if (activeTabId) {
-                setTabContents({
-                  ...tabContents,
-                  [activeTabId]: { type: "table", data: newData },
-                });
-              }
-            }}
-            onBurn={() => setBurnDialogOpen(true)}
-          />
-        );
-      case "curve":
-        return (
-          <CurveEditor
-            data={content.data as CurveData}
-            embedded={false}
-            simpleGaugeInfo={content.gauge}
-            onValuesChange={async (yBins) => {
-              if (activeTabId) {
-                // Update local state
-                const curveData = content.data as CurveData;
-                const updatedData = { ...curveData, y_bins: yBins };
-                setTabContents({
-                  ...tabContents,
-                  [activeTabId]: { type: "curve", data: updatedData, gauge: content.gauge },
-                });
-                // Save to backend
-                try {
-                  await invoke("update_curve_data", { 
-                    curveName: curveData.name, 
-                    yValues: yBins 
-                  });
-                } catch (err) {
-                  console.error("Failed to save curve data:", err);
-                  showToast("Failed to save curve changes", "error");
-                }
-              }
-            }}
-            onBack={() => activeTabId && handleTabClose(activeTabId)}
-          />
-        );
-      case "dialog":
-        // Find the active tab to get its formatted title
-        const activeTab = tabs.find(t => t.id === activeTabId);
-        return (
-          <DialogRenderer
-            definition={content.data as RendererDialogDef}
-            onBack={() => activeTabId && handleTabClose(activeTabId)}
-            openTable={(tableName) => openTarget(tableName)}
-            context={constantValues}
-            displayTitle={activeTab?.title}
-            highlightTerm={content.highlightTerm}
-            onOptimisticUpdate={(name, value) => {
-              // Immediately update the context so sibling fields re-evaluate their conditions
-              setConstantValues(prev => ({ ...prev, [name]: value }));
-            }}
-            onUpdate={async () => {
-              // Refresh constants and menu tree when constants are updated
-              // This ensures menu visibility conditions are re-evaluated
-              const values = await fetchConstants();
-              await fetchMenuTree(values);
-              // Update context for dialog fields
-              setConstantValues(values);
-            }}
-          />
-        );
-      case "portEditor": {
-        const portEditorMeta = content.data as PortEditorConfig | undefined;
-        if (!portEditorMeta) return null;
-        return (
-          <PortEditor
-            ecuType={ecuType}
-            title={portEditorMeta.label || "Port Editor"}
-            initialConfig={portEditorAssignments[portEditorMeta.name] || []}
-            onSave={async (config) => {
-              try {
-                await invoke("save_port_editor_assignments", {
-                  name: portEditorMeta.name,
-                  assignments: config,
-                });
-                setPortEditorAssignments(prev => ({ ...prev, [portEditorMeta.name]: config }));
-                showToast("Port assignments saved", "success");
-              } catch (err) {
-                console.error("Failed to save port editor assignments:", err);
-                showToast("Failed to save port assignments", "error");
-              }
-            }}
-            onCancel={() => activeTabId && handleTabClose(activeTabId)}
-          />
-        );
-      }
-      case "settings":
-        return <SettingsView />;
-      case "autotune":
-        return (
-          <AutoTune 
-            tableName={content.data as string || ''} 
-            onClose={() => handleTabClose("autotune")} 
-          />
-        );
-      case "datalog":
-        return <DataLogView />;
-      case "tooth-logger":
-        return <ToothLoggerView onClose={() => handleTabClose("tooth-logger")} />;
-      case "composite-logger":
-        return <CompositeLoggerView onClose={() => handleTabClose("composite-logger")} />;
-      case "och-status":
-        return <OutputChannelStatus />;
-      case "console":
-        return <EcuConsole ecuType={ecuType} isConnected={status.state === "Connected"} />;
-      case "lua-console":
-        return <LuaConsole />;
-      default:
-        return null;
-    }
-  };
 
   return (
     <>
@@ -2432,7 +2277,31 @@ function AppContent() {
         channelInfoMap={channelInfoMap}
       >
         <ErrorBoundary>
-          {renderTabContent()}
+          <TabContentRouter
+            currentProject={currentProject}
+            availableProjects={availableProjects}
+            status={status}
+            ecuType={ecuType}
+            activeTabId={activeTabId}
+            tabs={tabs}
+            tabContents={tabContents}
+            setTabContents={setTabContents}
+            openProject={openProject}
+            setNewProjectDialogOpen={setNewProjectDialogOpen}
+            setConnectionDialogOpen={setConnectionDialogOpen}
+            setImportProjectOpen={setImportProjectOpen}
+            handleDeleteProject={handleDeleteProject}
+            setBurnDialogOpen={setBurnDialogOpen}
+            handleTabClose={handleTabClose}
+            openTarget={openTarget}
+            fetchConstants={fetchConstants}
+            fetchMenuTree={fetchMenuTree}
+            setConstantValues={setConstantValues}
+            constantValues={constantValues}
+            portEditorAssignments={portEditorAssignments}
+            setPortEditorAssignments={setPortEditorAssignments}
+            showToast={showToast}
+          />
         </ErrorBoundary>
       </TunerLayout>
 
