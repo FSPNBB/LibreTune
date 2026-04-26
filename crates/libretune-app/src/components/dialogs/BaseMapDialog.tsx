@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Dialog, Button } from "../common";
+import { Dialog, Button, FormField } from "../common";
 import "./BaseMapDialog.css";
 
 interface BaseMapDialogProps {
@@ -120,132 +120,150 @@ export default function BaseMapDialog({
         {!result ? (
           <div className="basemap-form">
             <div className="basemap-grid">
-              <div className="basemap-field">
-                <label>Cylinders</label>
-                <select value={cylinders} onChange={(e) => setCylinders(parseInt(e.target.value))}>
-                  {[1, 2, 3, 4, 5, 6, 8, 10, 12].map((n) => (
-                    <option key={n} value={n}>{n}</option>
-                  ))}
-                </select>
-              </div>
+              <FormField label="Cylinders">
+                {(id) => (
+                  <select id={id} value={cylinders} onChange={(e) => setCylinders(parseInt(e.target.value))}>
+                    {[1, 2, 3, 4, 5, 6, 8, 10, 12].map((n) => (
+                      <option key={n} value={n}>{n}</option>
+                    ))}
+                  </select>
+                )}
+              </FormField>
 
-              <div className="basemap-field">
-                <label>Displacement (cc)</label>
-                <input
-                  type="number"
-                  value={displacement}
-                  onChange={(e) => setDisplacement(parseFloat(e.target.value) || 0)}
-                  min={50}
-                  max={15000}
-                />
-              </div>
+              <FormField label="Displacement (cc)">
+                {(id) => (
+                  <input
+                    id={id}
+                    type="number"
+                    value={displacement}
+                    onChange={(e) => setDisplacement(parseFloat(e.target.value) || 0)}
+                    min={50}
+                    max={15000}
+                  />
+                )}
+              </FormField>
 
-              <div className="basemap-field">
-                <label>Injector Size (cc/min)</label>
-                <input
-                  type="number"
-                  value={injectorSize}
-                  onChange={(e) => setInjectorSize(parseFloat(e.target.value) || 0)}
-                  min={50}
-                  max={5000}
-                />
-              </div>
+              <FormField label="Injector Size (cc/min)">
+                {(id) => (
+                  <input
+                    id={id}
+                    type="number"
+                    value={injectorSize}
+                    onChange={(e) => setInjectorSize(parseFloat(e.target.value) || 0)}
+                    min={50}
+                    max={5000}
+                  />
+                )}
+              </FormField>
 
-              <div className="basemap-field">
-                <label>Fuel Type</label>
-                <select value={fuelType} onChange={(e) => setFuelType(e.target.value)}>
-                  <option value="Gasoline">Gasoline</option>
-                  <option value="E85">E85</option>
-                  <option value="E100">E100</option>
-                  <option value="Methanol">Methanol</option>
-                  <option value="LPG">LPG / Propane</option>
-                </select>
-              </div>
+              <FormField label="Fuel Type">
+                {(id) => (
+                  <select id={id} value={fuelType} onChange={(e) => setFuelType(e.target.value)}>
+                    <option value="Gasoline">Gasoline</option>
+                    <option value="E85">E85</option>
+                    <option value="E100">E100</option>
+                    <option value="Methanol">Methanol</option>
+                    <option value="LPG">LPG / Propane</option>
+                  </select>
+                )}
+              </FormField>
 
-              <div className="basemap-field">
-                <label>Aspiration</label>
-                <select value={aspiration} onChange={(e) => setAspiration(e.target.value)}>
-                  <option value="NA">Naturally Aspirated</option>
-                  <option value="Turbo">Turbocharged</option>
-                  <option value="Supercharged">Supercharged</option>
-                </select>
-              </div>
+              <FormField label="Aspiration">
+                {(id) => (
+                  <select id={id} value={aspiration} onChange={(e) => setAspiration(e.target.value)}>
+                    <option value="NA">Naturally Aspirated</option>
+                    <option value="Turbo">Turbocharged</option>
+                    <option value="Supercharged">Supercharged</option>
+                  </select>
+                )}
+              </FormField>
 
-              <div className="basemap-field">
-                <label>Stroke Type</label>
-                <select value={strokeType} onChange={(e) => setStrokeType(e.target.value)}>
-                  <option value="four_stroke">4-Stroke</option>
-                  <option value="two_stroke">2-Stroke</option>
-                </select>
-              </div>
+              <FormField label="Stroke Type">
+                {(id) => (
+                  <select id={id} value={strokeType} onChange={(e) => setStrokeType(e.target.value)}>
+                    <option value="four_stroke">4-Stroke</option>
+                    <option value="two_stroke">2-Stroke</option>
+                  </select>
+                )}
+              </FormField>
 
-              <div className="basemap-field">
-                <label>Injection Mode</label>
-                <select value={injectionMode} onChange={(e) => setInjectionMode(e.target.value)}>
-                  <option value="Sequential">Sequential</option>
-                  <option value="Batch">Batch</option>
-                  <option value="Simultaneous">Simultaneous</option>
-                  <option value="throttle_body">Throttle Body</option>
-                </select>
-              </div>
+              <FormField label="Injection Mode">
+                {(id) => (
+                  <select id={id} value={injectionMode} onChange={(e) => setInjectionMode(e.target.value)}>
+                    <option value="Sequential">Sequential</option>
+                    <option value="Batch">Batch</option>
+                    <option value="Simultaneous">Simultaneous</option>
+                    <option value="throttle_body">Throttle Body</option>
+                  </select>
+                )}
+              </FormField>
 
-              <div className="basemap-field">
-                <label>Ignition Mode</label>
-                <select value={ignitionMode} onChange={(e) => setIgnitionMode(e.target.value)}>
-                  <option value="wasted_spark">Wasted Spark</option>
-                  <option value="coil_on_plug">Coil on Plug</option>
-                  <option value="distributor">Distributor</option>
-                </select>
-              </div>
+              <FormField label="Ignition Mode">
+                {(id) => (
+                  <select id={id} value={ignitionMode} onChange={(e) => setIgnitionMode(e.target.value)}>
+                    <option value="wasted_spark">Wasted Spark</option>
+                    <option value="coil_on_plug">Coil on Plug</option>
+                    <option value="distributor">Distributor</option>
+                  </select>
+                )}
+              </FormField>
 
-              <div className="basemap-field">
-                <label>Idle RPM</label>
-                <input
-                  type="number"
-                  value={idleRpm}
-                  onChange={(e) => setIdleRpm(parseInt(e.target.value) || 500)}
-                  min={400}
-                  max={2000}
-                />
-              </div>
+              <FormField label="Idle RPM">
+                {(id) => (
+                  <input
+                    id={id}
+                    type="number"
+                    value={idleRpm}
+                    onChange={(e) => setIdleRpm(parseInt(e.target.value) || 500)}
+                    min={400}
+                    max={2000}
+                  />
+                )}
+              </FormField>
 
-              <div className="basemap-field">
-                <label>Redline RPM</label>
-                <input
-                  type="number"
-                  value={redlineRpm}
-                  onChange={(e) => setRedlineRpm(parseInt(e.target.value) || 6000)}
-                  min={2000}
-                  max={20000}
-                />
-              </div>
+              <FormField label="Redline RPM">
+                {(id) => (
+                  <input
+                    id={id}
+                    type="number"
+                    value={redlineRpm}
+                    onChange={(e) => setRedlineRpm(parseInt(e.target.value) || 6000)}
+                    min={2000}
+                    max={20000}
+                  />
+                )}
+              </FormField>
 
               {isBoosted && (
-                <div className="basemap-field">
-                  <label>Boost Target (kPa absolute)</label>
-                  <input
-                    type="number"
-                    value={boostTarget}
-                    onChange={(e) => setBoostTarget(parseFloat(e.target.value) || 150)}
-                    min={120}
-                    max={400}
-                  />
-                  <span className="basemap-hint">
-                    {((boostTarget - 101.325) / 100).toFixed(1)} bar / {((boostTarget - 101.325) * 0.145).toFixed(1)} psi gauge
-                  </span>
-                </div>
+                <FormField
+                  label="Boost Target (kPa absolute)"
+                  help={`${((boostTarget - 101.325) / 100).toFixed(1)} bar / ${((boostTarget - 101.325) * 0.145).toFixed(1)} psi gauge`}
+                >
+                  {(id) => (
+                    <input
+                      id={id}
+                      type="number"
+                      value={boostTarget}
+                      onChange={(e) => setBoostTarget(parseFloat(e.target.value) || 150)}
+                      min={120}
+                      max={400}
+                    />
+                  )}
+                </FormField>
               )}
 
-              <div className="basemap-field">
-                <label>Target WOT AFR (optional)</label>
-                <input
-                  type="number"
-                  value={wotAfr}
-                  onChange={(e) => setWotAfr(e.target.value)}
-                  placeholder="Auto (safe rich)"
-                  step={0.1}
-                />
-              </div>
+              <FormField label="Target WOT AFR (optional)">
+                {(id) => (
+                  <input
+                    id={id}
+                    type="number"
+                    value={wotAfr}
+                    onChange={(e) => setWotAfr(e.target.value)}
+                    placeholder="Auto (safe rich)"
+                    step={0.1}
+                  />
+                )}
+              </FormField>
             </div>
 
             {error && <div className="basemap-error">{error}</div>}
