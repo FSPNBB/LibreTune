@@ -65,7 +65,7 @@ use commands::table_ops::{
     set_cells_equal, smooth_table,
 };
 use commands::ini_meta::{
-    get_curves, get_frontpage, get_gauge_config, get_gauge_configs, get_tables, TableInfo,
+    get_curves, get_frontpage, get_gauge_config, get_gauge_configs, get_tables,
 };
 use commands::ini_dialogs::{
     evaluate_expression, get_dialog_definition, get_help_topic, get_indicator_panel,
@@ -83,7 +83,8 @@ use commands::project_mgmt::{
 };
 use commands::project_misc::{delete_project, get_msq_info};
 use commands::project_listing::{get_projects_path, list_projects};
-use commands::cache_status::{get_table_info, get_tune_cache_status, TuneCacheStatus};
+use commands::cache_status::{get_table_info, get_tune_cache_status};
+use commands::connection::{auto_load_last_ini, disconnect_ecu, get_connection_status};
 use commands::metrics::{start_metrics_task, stop_metrics_task};
 use commands::tune_info::{get_tune_info, new_tune, TuneInfo};
 use commands::tune_io::{burn_to_ecu, execute_controller_command, list_tune_files};
@@ -221,12 +222,12 @@ fn bit_mask_u8(bits: u8) -> u8 {
 }
 
 #[derive(Serialize)]
-struct ConnectionStatus {
-    state: ConnectionState,
-    signature: Option<String>,
-    has_definition: bool,
-    ini_name: Option<String>,
-    demo_mode: bool,
+pub(crate) struct ConnectionStatus {
+    pub state: ConnectionState,
+    pub signature: Option<String>,
+    pub has_definition: bool,
+    pub ini_name: Option<String>,
+    pub demo_mode: bool,
 }
 
 /// Signature match type for comparing ECU and INI signatures
@@ -1661,85 +1662,7 @@ async fn sync_ecu_data(
     })
 }
 
-/// Disconnects from the currently connected ECU.
-///
-/// Closes the serial connection and clears the connection state.
-///
-/// Returns: Nothing on success
-#[tauri::command]
-async fn disconnect_ecu(state: tauri::State<'_, AppState>) -> Result<(), String> {
-    // Stop metrics task first
-    stop_metrics_task(state.clone()).await;
-
-    let mut guard = state.connection.lock().await;
-    *guard = None;
-    Ok(())
-}
-
-// Adaptive timing commands extracted to commands/adaptive_timing.rs
-/// Gets the current ECU connection status.
-///
-/// Returns comprehensive connection information including state, ECU signature,
-/// loaded INI info, and demo mode status.
-///
-/// Returns: ConnectionStatus with connection state and metadata
-#[tauri::command]
-async fn get_connection_status(
-    state: tauri::State<'_, AppState>,
-) -> Result<ConnectionStatus, String> {
-    // IMPORTANT: Acquire each lock independently and release before taking the next.
-    // Holding multiple locks simultaneously causes deadlocks with the realtime stream task.
-    let demo_mode = *state.demo_mode.lock().await;
-
-    let (state_val, signature) = if demo_mode {
-        (
-            ConnectionState::Connected,
-            Some("DEMO - Simulated EpicEFI".to_string()),
-        )
-    } else {
-        set_conn_lock_holder("get_connection_status");
-        let conn_guard = state.connection.lock().await;
-        let result = match &*conn_guard {
-            Some(conn) => (conn.state(), conn.signature().map(|s| s.to_string())),
-            None => (ConnectionState::Disconnected, None),
-        };
-        drop(conn_guard);
-        set_conn_lock_holder("(none)");
-        result
-    };
-
-    let (has_definition, ini_name) = {
-        let def_guard = state.definition.lock().await;
-        (
-            def_guard.is_some(),
-            def_guard.as_ref().map(|d| d.signature.clone()),
-        )
-    };
-
-    Ok(ConnectionStatus {
-        state: state_val,
-        signature,
-        has_definition,
-        ini_name,
-        demo_mode,
-    })
-}
-
-/// Retrieves the path to the last-used INI file from settings.
-///
-/// Used on startup to auto-load the previously used ECU definition.
-///
-/// Returns: Optional path to last INI file, or None if not set or file missing
-#[tauri::command]
-async fn auto_load_last_ini(app: tauri::AppHandle) -> Result<Option<String>, String> {
-    let settings = load_settings(&app);
-    if let Some(path) = settings.last_ini_path {
-        if Path::new(&path).exists() {
-            return Ok(Some(path));
-        }
-    }
-    Ok(None)
-}
+// disconnect_ecu, get_connection_status, auto_load_last_ini extracted to commands/connection.rs
 
 #[derive(Serialize)]
 pub(crate) struct TableData {
@@ -2923,13 +2846,13 @@ fn stream_log(msg: &str) {
 /// Used for diagnostics only — helps identify which command is blocking the stream.
 static CONN_LOCK_HOLDER: std::sync::Mutex<&str> = std::sync::Mutex::new("(none)");
 
-fn set_conn_lock_holder(who: &'static str) {
+pub(crate) fn set_conn_lock_holder(who: &'static str) {
     if let Ok(mut guard) = CONN_LOCK_HOLDER.lock() {
         *guard = who;
     }
 }
 
-fn get_conn_lock_holder() -> String {
+pub(crate) fn get_conn_lock_holder() -> String {
     CONN_LOCK_HOLDER
         .lock()
         .map(|g| g.to_string())
