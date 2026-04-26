@@ -9,7 +9,7 @@ use libretune_core::protocol::ConnectionConfig;
 /// - Lowercase
 /// - Replace non-alphanumeric characters with spaces
 /// - Collapse multiple spaces
-fn normalize_signature(s: &str) -> String {
+pub(crate) fn normalize_signature(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut last_was_space = false;
 
@@ -111,7 +111,7 @@ pub(crate) fn compare_signatures(ecu_sig: &str, ini_sig: &str) -> SignatureMatch
 
 /// Build a shallow SignatureMismatchInfo (without resolving matching INIs) for testing
 #[allow(dead_code)]
-fn build_shallow_mismatch_info(
+pub(crate) fn build_shallow_mismatch_info(
     ecu_signature: &str,
     ini_signature: &str,
     current_ini_path: Option<String>,
@@ -136,7 +136,7 @@ pub(crate) async fn find_matching_inis_internal(
 
 // Test-only helper: simulate the signature handling part of connect_to_ecu
 #[cfg(test)]
-async fn connect_to_ecu_simulated(state: &AppState, signature: &str) -> ConnectResult {
+pub(crate) async fn connect_to_ecu_simulated(state: &AppState, signature: &str) -> ConnectResult {
     // If there's a loaded definition, compare signatures
     let expected_signature = {
         let def_guard = state.definition.lock().await;
@@ -218,7 +218,7 @@ pub(crate) async fn call_connection_factory_and_build_result(
 }
 
 /// Test-friendly variant that operates on an AppState reference directly
-async fn find_matching_inis_from_state(
+pub(crate) async fn find_matching_inis_from_state(
     state: &AppState,
     ecu_signature: &str,
 ) -> Vec<MatchingIniInfo> {

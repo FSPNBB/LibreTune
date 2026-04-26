@@ -97,6 +97,19 @@ pub(crate) use commands::app_settings::{
 pub(crate) use commands::signature_helpers::{
     call_connection_factory_and_build_result, compare_signatures, find_matching_inis_internal,
 };
+#[cfg(test)]
+pub(crate) use commands::signature_helpers::{
+    build_shallow_mismatch_info, connect_to_ecu_simulated, find_matching_inis_from_state,
+    normalize_signature,
+};
+#[cfg(test)]
+pub(crate) use commands::app_settings::default_runtime_packet_mode;
+#[cfg(test)]
+use libretune_core::ini::{EcuDefinition, Endianness, ProtocolSettings};
+#[cfg(test)]
+use libretune_core::project::IniRepository;
+#[cfg(test)]
+use libretune_core::protocol::ConnectionConfig;
 pub(crate) use commands::types::{
     ConnectResult, ConnectionSettingsResponse, ConnectionStatus, ConstantInfo, CurrentProjectInfo,
     MatchingIniInfo, SignatureMatchType, SignatureMismatchInfo, SyncProgress, SyncResult,

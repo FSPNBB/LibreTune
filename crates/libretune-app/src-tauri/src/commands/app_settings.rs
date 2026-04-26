@@ -92,7 +92,7 @@ pub(crate) struct Settings {
     pub(crate) language: Option<String>,
 }
 
-fn default_runtime_packet_mode() -> String {
+pub(crate) fn default_runtime_packet_mode() -> String {
     "Auto".to_string()
 }
 
