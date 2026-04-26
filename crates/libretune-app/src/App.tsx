@@ -60,6 +60,26 @@ import PortEditor, { PinConfig } from "./components/hardware/PortEditor";
 import { useLoading } from "./components/LoadingContext";
 import { useToast } from "./components/ToastContext";
 import { SettingsView } from "./components/SettingsView";
+import {
+  type ConnectionStatus,
+  type ConnectResult,
+  type SyncResult,
+  type SyncStatus,
+  type CurrentProject,
+  type IniCapabilities,
+  type ProjectInfo,
+  type IniEntry,
+  type BackendTableData,
+  type BackendCurveData,
+  type ChannelInfo,
+  type BackendMenu,
+  type BackendMenuItem,
+  type ProtocolDefaults,
+  type PortEditorConfig,
+  type TabContent,
+  toTunerTableData,
+  toCurveData,
+} from "./types/app";
 import "./styles";
 
 // ─── Module-level realtime event listener ───────────────────────────────────
@@ -86,190 +106,6 @@ function ensureRealtimeListener(): Promise<void> {
     console.log("[realtime] Global event listener registered");
   })();
   return _realtimeListenerPromise;
-}
-
-// Backend types
-interface ConnectionStatus {
-  state: "Connected" | "Connecting" | "Disconnected" | "Error";
-  signature: string | null;
-  has_definition: boolean;
-  ini_name?: string | null;
-}
-
-interface ConnectResult {
-  signature: string;
-  mismatch_info: SignatureMismatchInfo | null;
-}
-
-interface SyncResult {
-  success: boolean;
-  pages_synced: number;
-  pages_failed: number;
-  total_pages: number;
-  errors: string[];
-}
-
-interface SyncStatus {
-  pages_synced: number;
-  pages_failed: number;
-  total_pages: number;
-  errors: string[];
-}
-
-interface CurrentProject {
-  name: string;
-  path: string;
-  signature: string;
-  has_tune: boolean;
-  tune_modified: boolean;
-  connection: {
-    port: string | null;
-    baud_rate: number;
-    auto_connect: boolean;
-  };
-}
-
-interface IniCapabilities {
-  has_constants: boolean;
-  has_output_channels: boolean;
-  has_tables: boolean;
-  has_curves: boolean;
-  has_gauges: boolean;
-  has_frontpage: boolean;
-  has_dialogs: boolean;
-  has_help_topics: boolean;
-  has_setting_groups: boolean;
-  has_pc_variables: boolean;
-  has_default_values: boolean;
-  has_datalog_entries: boolean;
-  has_datalog_views: boolean;
-  has_logger_definitions: boolean;
-  has_controller_commands: boolean;
-  has_port_editors: boolean;
-  has_reference_tables: boolean;
-  has_key_actions: boolean;
-  has_ve_analyze: boolean;
-  has_wue_analyze: boolean;
-  has_gamma_e: boolean;
-  supports_console: boolean;
-}
-
-interface ProjectInfo {
-  name: string;
-  path: string;
-  signature: string;
-  modified: string;
-}
-
-interface IniEntry {
-  id: string;
-  name: string;
-  signature: string;
-  path: string;
-}
-
-interface BackendTableData {
-  name: string;
-  title: string;
-  x_axis_name?: string;
-  y_axis_name?: string;
-  x_bins: number[];
-  y_bins: number[];
-  z_values: number[][];
-  x_output_channel?: string | null;
-  y_output_channel?: string | null;
-}
-
-interface BackendCurveData {
-  name: string;
-  title: string;
-  x_bins: number[];
-  y_bins: number[];
-  x_label: string;
-  y_label: string;
-  x_axis?: [number, number, number] | null;
-  y_axis?: [number, number, number] | null;
-  x_output_channel?: string | null;
-  gauge?: string | null;
-}
-
-interface ChannelInfo {
-  name: string;
-  label?: string | null;
-  units: string;
-  scale: number;
-  translate: number;
-}
-
-const toTunerTableData = (data: BackendTableData): TunerTableData => ({
-  name: data.name,
-  xAxis: data.x_bins,
-  yAxis: data.y_bins,
-  zValues: data.z_values,
-  xLabel: data.x_axis_name || 'X',
-  yLabel: data.y_axis_name || 'Y',
-  xOutputChannel: data.x_output_channel ?? undefined,
-  yOutputChannel: data.y_output_channel ?? undefined,
-});
-
-const toCurveData = (data: BackendCurveData): CurveData => ({
-  name: data.name,
-  title: data.title,
-  x_bins: data.x_bins,
-  y_bins: data.y_bins,
-  x_label: data.x_label,
-  y_label: data.y_label,
-  x_axis: data.x_axis,
-  y_axis: data.y_axis,
-  x_output_channel: data.x_output_channel,
-  gauge: data.gauge,
-});
-
-interface BackendMenu {
-  name: string;
-  title: string;
-  items: BackendMenuItem[];
-}
-
-interface BackendMenuItem {
-  type: "SubMenu" | "Table" | "Dialog" | "Separator" | "Std" | "Help";
-  label?: string;
-  target?: string;
-  condition?: string;
-  items?: BackendMenuItem[];
-  /** Whether item is visible (evaluated from visibility_condition) */
-  visible?: boolean;
-  /** Whether item is enabled (evaluated from enabled_condition) */
-  enabled?: boolean;
-  /** Original visibility condition expression for tooltip */
-  visibility_condition?: string;
-}
-
-// Protocol defaults fetched from loaded INI
-interface ProtocolDefaults {
-  default_baud_rate: number;
-  inter_write_delay: number;
-  delay_after_port_open: number;
-  message_envelope_format?: string | null;
-  page_activation_delay: number;
-  timeout_ms: number;
-}
-
-
-// PortEditor configuration from backend
-interface PortEditorConfig {
-  name: string;
-  label: string;
-  enable_condition?: string;
-}
-
-// Tab content types
-interface TabContent {
-  type: "dashboard" | "table" | "curve" | "dialog" | "portEditor" | "settings" | "project" | "autotune" | "datalog" | "tooth-logger" | "composite-logger" | "console" | "lua-console" | "och-status";
-  data?: TunerTableData | RendererDialogDef | PortEditorConfig | CurveData | string;
-  gauge?: SimpleGaugeInfo | null; // For curve tabs with associated gauges
-  /** Search term to highlight within the content (e.g., matching field labels in dialogs) */
-  highlightTerm?: string;
 }
 
 function AppContent() {
