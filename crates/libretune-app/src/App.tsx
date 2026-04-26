@@ -27,11 +27,11 @@ import { useErrorDialog } from "./components/dialogs/ErrorDetailsDialog";
 import ErrorBoundary from "./components/common/ErrorBoundary";
 import { DialogOverlays } from "./components/DialogOverlays";
 import { useBackendEventListeners } from "./hooks/useBackendEventListeners";
+import { useRealtimeStream } from "./hooks/useRealtimeStream";
 import { PinConfig } from "./components/hardware/PortEditor";
 import { useLoading } from "./components/LoadingContext";
 import { useToast } from "./components/ToastContext";
 import { formatError } from "./utils/formatError";
-import { ensureRealtimeListener } from "./services/realtimeListener";
 import { buildSidebarItems } from "./utils/buildSidebarItems";
 import { TabContentRouter } from "./components/TabContentRouter";
 import { buildMenuItems } from "./menus/buildMenuItems";
@@ -724,85 +724,8 @@ function AppContent() {
   //
   // The effect's only job is to start the backend stream (which always replaces any
   // existing task) and clear channels on cleanup.
-  useEffect(() => {
-    console.log(`[Stream effect] status.state=${status.state} has_definition=${status.has_definition}`);
-    let pollIntervalHandle: NodeJS.Timeout | null = null;
-    let heartbeatHandle: NodeJS.Timeout | null = null;
-    let cancelled = false;
-
-    if (status.state === "Connected" && status.has_definition) {
-      console.log("[Stream effect] Condition met, starting IIFE");
-      (async () => {
-        // Ensure the global event listener is registered (no-op if already done)
-        console.log("[Stream effect] Registering listener...");
-        await ensureRealtimeListener();
-        if (cancelled) { console.log("[Stream effect] cancelled after listener"); return; }
-
-        // Start the backend stream. start_realtime_stream always aborts any
-        // existing task before creating a new one, so concurrent calls from
-        // StrictMode double-mount are harmless — the last one wins.
-        try {
-          console.log("[Stream effect] Calling start_realtime_stream...");
-          await invoke("start_realtime_stream", { intervalMs: 50 });
-          console.log("[Stream effect] Stream started successfully");
-        } catch (e) {
-          console.warn("Realtime stream failed, falling back to polling with backoff:", e);
-          if (cancelled) return;
-          let pollInterval = 500;
-          let failureCount = 0;
-          const maxInterval = 2000;
-          
-          const startPolling = () => {
-            pollIntervalHandle = setInterval(async () => {
-              try {
-                await fetchRealtimeData();
-                if (pollInterval > 100) {
-                  pollInterval = Math.max(100, pollInterval / 1.5);
-                  if (pollIntervalHandle) clearInterval(pollIntervalHandle);
-                  startPolling();
-                }
-                failureCount = 0;
-              } catch (error) {
-                failureCount++;
-                if (failureCount >= 3) {
-                  pollInterval = Math.min(maxInterval, pollInterval * 1.5);
-                  if (pollIntervalHandle) clearInterval(pollIntervalHandle);
-                  startPolling();
-                  failureCount = 0;
-                }
-              }
-            }, pollInterval);
-          };
-          
-          startPolling();
-        }
-
-        // Heartbeat: if no store update arrives for 2 seconds, restart the stream.
-        // Add cooldown to prevent thundering herd (max one restart per 10 seconds).
-        let lastRestartTime = 0;
-        heartbeatHandle = setInterval(() => {
-          if (cancelled) return;
-          const lastUpdate = useRealtimeStore.getState().lastUpdateTime;
-          const now = Date.now();
-          if (lastUpdate > 0 && now - lastUpdate > 2000 && now - lastRestartTime > 10000) {
-            console.warn("[Heartbeat] No realtime update for 2s, restarting stream (cooldown 10s)");
-            lastRestartTime = now;
-            invoke("start_realtime_stream", { intervalMs: 50 }).catch(() => {});
-          }
-        }, 2000);
-      })();
-    }
-
-    return () => {
-      console.log("[Stream effect] CLEANUP running");
-      cancelled = true;
-      // Do NOT unregister the event listener — it lives at module level.
-      // Do NOT call stop_realtime_stream — it races with the next mount's start.
-      if (pollIntervalHandle) clearInterval(pollIntervalHandle);
-      if (heartbeatHandle) clearInterval(heartbeatHandle);
-      useRealtimeStore.getState().clearChannels();
-    };
-  }, [status.state, status.has_definition]);
+  // Realtime ECU data stream lifecycle (extracted to hook).
+  useRealtimeStream(status, fetchRealtimeData);
 
   // Poll logging status when recording
   useEffect(() => {
