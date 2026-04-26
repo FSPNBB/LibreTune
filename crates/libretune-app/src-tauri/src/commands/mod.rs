@@ -18,6 +18,7 @@ pub mod constant_update;
 pub mod realtime_stop;
 pub mod find_inis;
 pub mod apply_base_map;
+pub mod update_project_ini;
 pub mod debug_realtime;
 pub mod realtime_get;
 pub mod annotations;
