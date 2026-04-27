@@ -22,10 +22,9 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 /// Optional test seam: factory to produce a signature without opening real serial ports.
-pub type ConnectionFactory =
-    dyn Fn(ConnectionConfig, Option<ProtocolSettings>, Endianness) -> Result<String, String>
-        + Send
-        + Sync;
+pub type ConnectionFactory = dyn Fn(ConnectionConfig, Option<ProtocolSettings>, Endianness) -> Result<String, String>
+    + Send
+    + Sync;
 
 /// Tracks RPM state for key-on/off detection
 pub struct RpmStateTracker {
@@ -49,12 +48,7 @@ impl RpmStateTracker {
 
     /// Update RPM and check for state transitions.
     /// Returns Some(new_state) if state changed, None otherwise.
-    pub fn update(
-        &mut self,
-        rpm: f64,
-        threshold_rpm: f64,
-        timeout_sec: u32,
-    ) -> Option<RpmState> {
+    pub fn update(&mut self, rpm: f64, threshold_rpm: f64, timeout_sec: u32) -> Option<RpmState> {
         let rpm_above_threshold = rpm >= threshold_rpm;
 
         match self.current_state {

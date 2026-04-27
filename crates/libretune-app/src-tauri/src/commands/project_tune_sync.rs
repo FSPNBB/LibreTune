@@ -12,7 +12,9 @@ pub async fn mark_tune_modified(state: tauri::State<'_, AppState>) -> Result<(),
 /// Compare the current project tune with the tune synced from ECU
 /// Returns true if they differ, false if identical
 #[tauri::command]
-pub async fn compare_project_and_ecu_tunes(state: tauri::State<'_, AppState>) -> Result<bool, String> {
+pub async fn compare_project_and_ecu_tunes(
+    state: tauri::State<'_, AppState>,
+) -> Result<bool, String> {
     let tune_guard = state.current_tune.lock().await;
     let project_guard = state.current_project.lock().await;
 

@@ -3,7 +3,6 @@
 use libretune_core::protocol::ConnectionState;
 use serde::Serialize;
 
-
 #[derive(Serialize)]
 pub(crate) struct ConnectionStatus {
     pub state: ConnectionState,

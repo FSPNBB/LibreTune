@@ -258,4 +258,3 @@ pub async fn set_cells_equal(
         ..table_data
     })
 }
-

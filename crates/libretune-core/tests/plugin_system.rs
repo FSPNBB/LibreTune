@@ -43,10 +43,12 @@ fn test_plugin_manifest_permissions() {
 
 #[test]
 fn test_permission_enum_all_variants() {
-    let all_perms = [Permission::ReadTables,
+    let all_perms = [
+        Permission::ReadTables,
         Permission::WriteConstants,
         Permission::SubscribeChannels,
-        Permission::ExecuteActions];
+        Permission::ExecuteActions,
+    ];
 
     assert_eq!(all_perms.len(), 4);
 

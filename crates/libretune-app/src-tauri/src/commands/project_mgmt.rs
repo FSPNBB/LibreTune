@@ -104,4 +104,3 @@ pub async fn update_project_auto_connect(
 
     Ok(())
 }
-

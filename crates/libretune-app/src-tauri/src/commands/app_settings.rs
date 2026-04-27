@@ -4,7 +4,6 @@ use crate::paths::get_settings_path;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-
 #[derive(Serialize, Deserialize, Default)]
 pub(crate) struct Settings {
     pub(crate) last_ini_path: Option<String>,

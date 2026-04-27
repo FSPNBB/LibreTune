@@ -5,7 +5,6 @@ use crate::state::AppState;
 use libretune_core::tune::PageState;
 use serde::Serialize;
 
-
 /// Lightweight command to check if a table exists in the definition
 /// This is used by the frontend to determine if a panel should render as a table button
 #[tauri::command]

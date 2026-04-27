@@ -7,9 +7,7 @@ use crate::{load_settings, save_settings};
 
 /// Get current hotkey bindings from settings.
 #[tauri::command]
-pub async fn get_hotkey_bindings(
-    app: tauri::AppHandle,
-) -> Result<HashMap<String, String>, String> {
+pub async fn get_hotkey_bindings(app: tauri::AppHandle) -> Result<HashMap<String, String>, String> {
     let settings = load_settings(&app);
     Ok(settings.hotkey_bindings.clone())
 }

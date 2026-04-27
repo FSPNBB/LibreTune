@@ -16,9 +16,6 @@ pub async fn detect_dyno_headers(path: String) -> Result<Vec<String>, String> {
 
 /// Compare two dyno runs
 #[tauri::command]
-pub async fn compare_dyno_runs(
-    run_a: DynoRun,
-    run_b: DynoRun,
-) -> Result<DynoComparison, String> {
+pub async fn compare_dyno_runs(run_a: DynoRun, run_b: DynoRun) -> Result<DynoComparison, String> {
     Ok(DynoComparison::compare(run_a, run_b))
 }

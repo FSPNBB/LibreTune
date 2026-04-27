@@ -95,11 +95,12 @@ menu = "Test Menu"
     // Verify the space-separated items have correct labels (not conditions)
     for item in &menu.items {
         if let libretune_core::ini::MenuItem::Dialog {
-                label,
-                target,
-                enabled_condition,
-                ..
-            } = item {
+            label,
+            target,
+            enabled_condition,
+            ..
+        } = item
+        {
             // Labels should NOT start with { - that would indicate the bug
             assert!(
                 !label.starts_with('{'),
@@ -335,7 +336,6 @@ signature = "1234"
 /// Ensures INI files with comments on section headers are correctly identified
 #[test]
 fn test_repository_extraction_with_comments() {
-    
 
     // We cannot access private static methods of IniRepository directly.
     // However, if we can trigger the same logic path...

@@ -1,8 +1,6 @@
 //! Signature comparison and INI matching helpers.
 
-use crate::{
-    AppState, ConnectResult, MatchingIniInfo, SignatureMatchType, SignatureMismatchInfo,
-};
+use crate::{AppState, ConnectResult, MatchingIniInfo, SignatureMatchType, SignatureMismatchInfo};
 use libretune_core::protocol::ConnectionConfig;
 
 /// Normalize a signature string for robust comparison:

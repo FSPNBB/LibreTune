@@ -251,8 +251,8 @@ fn test_ini_capabilities_consistency() {
 
     for path in samples {
         let filename = path.file_name().unwrap().to_string_lossy();
-        let def =
-            EcuDefinition::from_file(&path).unwrap_or_else(|_| panic!("Should parse INI: {}", filename));
+        let def = EcuDefinition::from_file(&path)
+            .unwrap_or_else(|_| panic!("Should parse INI: {}", filename));
         let caps = def.capabilities();
 
         assert_eq!(caps.has_constants, !def.constants.is_empty());
@@ -316,8 +316,8 @@ fn test_fome_ini_fields() {
 
     for path in &fome_files {
         let filename = path.file_name().unwrap().to_string_lossy();
-        let def =
-            EcuDefinition::from_file(path).unwrap_or_else(|_| panic!("Should parse FOME INI: {}", filename));
+        let def = EcuDefinition::from_file(path)
+            .unwrap_or_else(|_| panic!("Should parse FOME INI: {}", filename));
 
         // FOME files should have VeAnalyze section
         assert!(

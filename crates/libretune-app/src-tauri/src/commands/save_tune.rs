@@ -227,6 +227,9 @@ pub async fn save_tune(
 ///
 /// Returns: The path where the tune was saved
 #[tauri::command]
-pub async fn save_tune_as(state: tauri::State<'_, AppState>, path: String) -> Result<String, String> {
+pub async fn save_tune_as(
+    state: tauri::State<'_, AppState>,
+    path: String,
+) -> Result<String, String> {
     save_tune(state, Some(path)).await
 }

@@ -2,9 +2,7 @@
 
 use crate::read_raw_value;
 use crate::state::{is_maf_channel_name, AppState, AutoTuneConfig, AutoTuneLoadSource, AxisHint};
-use libretune_core::autotune::{
-    AutoTuneAuthorityLimits, AutoTuneFilters, AutoTuneSettings,
-};
+use libretune_core::autotune::{AutoTuneAuthorityLimits, AutoTuneFilters, AutoTuneSettings};
 use libretune_core::ini::EcuDefinition;
 use libretune_core::tune::TuneCache;
 

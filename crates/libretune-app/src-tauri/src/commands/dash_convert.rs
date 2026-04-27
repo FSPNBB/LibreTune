@@ -1,14 +1,14 @@
 //! Dashboard format conversion helpers (legacy DashboardLayout <-> TS DashFile).
 
+use libretune_core::dash::layout::{DashboardLayout, GaugeConfig as DashboardGaugeConfig};
 use libretune_core::dash::{
     self, Bibliography, DashComponent, DashFile, GaugePainter, TsColor, VersionInfo,
 };
-use libretune_core::dash::layout::{DashboardLayout, GaugeConfig as DashboardGaugeConfig};
 
 /// Convert legacy DashboardLayout to TS DashFile format
 pub(crate) fn convert_layout_to_dashfile(layout: &DashboardLayout) -> DashFile {
-    use libretune_core::dash::{BackgroundStyle, GaugeCluster};
     use libretune_core::dash::layout::GaugeType;
+    use libretune_core::dash::{BackgroundStyle, GaugeCluster};
 
     let mut dash = DashFile {
         bibliography: Bibliography {

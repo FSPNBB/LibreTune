@@ -105,7 +105,9 @@ pub(crate) struct FrontPageInfo {
 ///
 /// Returns: Optional FrontPageInfo with gauge references and indicators
 #[tauri::command]
-pub async fn get_frontpage(state: tauri::State<'_, AppState>) -> Result<Option<FrontPageInfo>, String> {
+pub async fn get_frontpage(
+    state: tauri::State<'_, AppState>,
+) -> Result<Option<FrontPageInfo>, String> {
     let def_guard = state.definition.lock().await;
     let def = def_guard.as_ref().ok_or("Definition not loaded")?;
 
@@ -135,7 +137,9 @@ pub async fn get_frontpage(state: tauri::State<'_, AppState>) -> Result<Option<F
 ///
 /// Returns: Vector of GaugeInfo for all defined gauges
 #[tauri::command]
-pub async fn get_gauge_configs(state: tauri::State<'_, AppState>) -> Result<Vec<GaugeInfo>, String> {
+pub async fn get_gauge_configs(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<GaugeInfo>, String> {
     let def_guard = state.definition.lock().await;
     let def = def_guard.as_ref().ok_or("Definition not loaded")?;
 
@@ -187,4 +191,3 @@ pub async fn get_gauge_config(
         digits: gauge.digits,
     })
 }
-

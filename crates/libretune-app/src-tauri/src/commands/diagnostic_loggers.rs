@@ -5,7 +5,6 @@ use tauri::Emitter;
 
 use crate::state::AppState;
 
-
 /// Tooth log entry (single tooth timing)
 #[derive(Debug, Clone, Serialize)]
 pub struct ToothLogEntry {

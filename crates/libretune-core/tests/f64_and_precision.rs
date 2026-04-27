@@ -161,10 +161,12 @@ fn test_integer_value_formatting() {
 /// Test array formatting with high precision
 #[test]
 fn test_array_precision_formatting() {
-    let values = [1.234567890123456_f64,
+    let values = [
+        1.234567890123456_f64,
         0.000000001_f64,
         100.0_f64,
-        3.14159265358979_f64];
+        3.14159265358979_f64,
+    ];
 
     let formatted: Vec<String> = values
         .iter()

@@ -6,7 +6,6 @@ use libretune_core::tune::TuneCache;
 use std::path::PathBuf;
 use tauri::{Emitter, Manager};
 
-
 /// Enable or disable demo mode (simulated ECU for UI testing)
 /// When enabled, loads a bundled EpicEFI INI and generates simulated sensor data
 #[tauri::command]

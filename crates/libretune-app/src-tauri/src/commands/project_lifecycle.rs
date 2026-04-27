@@ -1,6 +1,8 @@
 //! create_project and open_project commands (extracted from lib.rs).
 
-use crate::{load_settings, save_settings, AppState, ConnectionSettingsResponse, CurrentProjectInfo};
+use crate::{
+    load_settings, save_settings, AppState, ConnectionSettingsResponse, CurrentProjectInfo,
+};
 use libretune_core::ini::EcuDefinition;
 use libretune_core::project::{load_math_channels, Project};
 use libretune_core::tune::{TuneCache, TuneFile};

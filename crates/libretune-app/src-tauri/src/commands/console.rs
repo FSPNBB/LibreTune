@@ -61,9 +61,7 @@ pub async fn send_console_command(
 
 /// Get full console command history.
 #[tauri::command]
-pub async fn get_console_history(
-    state: tauri::State<'_, AppState>,
-) -> Result<Vec<String>, String> {
+pub async fn get_console_history(state: tauri::State<'_, AppState>) -> Result<Vec<String>, String> {
     let history = state.console_history.lock().await;
     Ok(history.clone())
 }

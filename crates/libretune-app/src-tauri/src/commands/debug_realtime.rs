@@ -6,7 +6,9 @@ use crate::state::AppState;
 ///
 /// Diagnostic: perform a single realtime read and return raw + parsed info
 #[tauri::command]
-pub async fn debug_single_realtime_read(state: tauri::State<'_, AppState>) -> Result<String, String> {
+pub async fn debug_single_realtime_read(
+    state: tauri::State<'_, AppState>,
+) -> Result<String, String> {
     let mut report = String::new();
 
     // 1) Check definition

@@ -149,4 +149,3 @@ pub async fn get_help_topic(
         .cloned()
         .ok_or_else(|| format!("Help topic {} not found", name))
 }
-

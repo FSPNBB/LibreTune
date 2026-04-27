@@ -88,7 +88,6 @@ mod runtime_mode_tests {
 // Dashboard Format Conversion Helpers
 // =============================================================================
 
-
 #[cfg(test)]
 mod concurrency_tests {
     use super::*;

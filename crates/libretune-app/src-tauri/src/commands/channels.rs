@@ -1,7 +1,7 @@
 //! Output channel info and status-bar defaults.
 
-use crate::state::{AppState, StreamStats};
 use crate::load_settings;
+use crate::state::{AppState, StreamStats};
 use serde::Serialize;
 
 /// Output channel info returned to frontend
