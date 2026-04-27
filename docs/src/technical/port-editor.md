@@ -187,7 +187,7 @@ Same as naturally aspirated, but may include:
 - Always reference the specific board's pinout diagram
 - Some boards have limited pin count (check your variant)
 
-### EpicEFI
+### epicEFI
 
 - Similar to rusEFI pinout
 - Verify board variant (256C, etc.)

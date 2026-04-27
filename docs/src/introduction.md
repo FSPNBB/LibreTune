@@ -1,6 +1,6 @@
 # Introduction
 
-Welcome to **LibreTune**, a modern, open-source ECU tuning application for Speeduino, EpicEFI, rusEFI, and other compatible aftermarket engine control units.
+Welcome to **LibreTune**, a modern, open-source ECU tuning application for Speeduino, epicEFI, rusEFI, and other compatible aftermarket engine control units.
 
 ![LibreTune Welcome Screen](../screenshots/welcome.png)
 
@@ -44,7 +44,7 @@ LibreTune works with any ECU that uses the standard INI definition format:
 
 - **Speeduino** - All versions
 - **rusEFI** - All board variants
-- **EpicEFI** - All versions
+- **epicEFI** - All versions
 - **MegaSquirt** - MS2, MS3 (compatibility mode)
 
 ## Getting Started

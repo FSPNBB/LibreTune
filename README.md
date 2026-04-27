@@ -7,7 +7,7 @@
 
 [![](https://dcbadge.limes.pink/api/server/5X7tFUfqCr)](https://discord.gg/5X7tFUfqCr)
 
-Modern, open-source ECU tuning software for Speeduino, rusEFI, EpicEFI, and other INI-compatible aftermarket engine control units. Built with a Rust core and a native desktop UI via Tauri.
+Modern, open-source ECU tuning software for Speeduino, rusEFI, epicEFI, and other INI-compatible aftermarket engine control units. Built with a Rust core and a native desktop UI via Tauri.
 
 > ⚠️ **Project status — early days.** These notes are largely agentically written and may not be 100% accurate. Public contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the [CHANGELOG](CHANGELOG.md) for what's landed recently.
 
@@ -64,7 +64,7 @@ For full documentation, see the [User Manual](https://rallypat.github.io/LibreTu
 | **Speeduino** | ✅ | ✅ |
 | **rusEFI** | ✅ | ✅ |
 | **FOME** | ✅ | ✅ |
-| **EpicEFI** | ✅ | ✅ |
+| **epicEFI** | ✅ | ✅ |
 | **MegaSquirt MS2/MS3** | ✅ | Partial |
 
 Any ECU using the standard INI definition format should be compatible.

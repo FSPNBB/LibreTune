@@ -11,7 +11,7 @@ edition = "2021"
 license = "GPL-2.0-only"
 authors = ["LibreTune Contributors"]
 repository = "https://github.com/RallyPat/LibreTune"
-description = "Modern ECU tuning software for Speeduino, EpicEFI, and compatible ECUs"
+description = "Modern ECU tuning software for Speeduino, epicEFI, and compatible ECUs"
 
 [workspace.dependencies]
 # Async runtime

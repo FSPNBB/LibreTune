@@ -9,14 +9,14 @@ const MAX_HISTORY: usize = 1000;
 
 /// Get the current ECU type (for console and other ECU-specific features).
 ///
-/// Returns `EcuType` as a debug string: "Speeduino", "RusEFI", "FOME",
-/// "EpicEFI", "MS2", "MS3", or "Unknown".
+/// Returns the stylized display name: "Speeduino", "rusEFI", "FOME",
+/// "epicEFI", "MegaSquirt 2", "MegaSquirt 3", or "Unknown".
 #[tauri::command]
 pub async fn get_ecu_type(state: tauri::State<'_, AppState>) -> Result<String, String> {
     let def_guard = state.definition.lock().await;
     let def = def_guard.as_ref().ok_or("No INI definition loaded")?;
 
-    Ok(format!("{:?}", def.ecu_type))
+    Ok(def.ecu_type.display_name().to_string())
 }
 
 /// Send a console command to the ECU (rusEFI/FOME/epicEFI only).

@@ -24,8 +24,8 @@ All rusEFI board variants:
 
 **Features**: Full support including advanced features.
 
-### EpicEFI
-All EpicEFI firmware versions:
+### epicEFI
+All epicEFI firmware versions:
 - Standard epicECU boards
 - 115200 baud communication
 
@@ -125,7 +125,7 @@ If you need a trigger pattern that's not in the list:
 3. **Request Feature**: Contact your ECU manufacturer:
    - Speeduino: https://speeduino.com/forum/
    - rusEFI: https://github.com/rusefi/rusefi
-   - EpicEFI: Contact through their channels
+   - epicEFI: Contact through their channels
 4. **Import New INI**: Once firmware is updated, import matching INI to LibreTune
 
 **Example**: For detailed information on requesting trigger pattern support, see [NISSAN_QG18_TRIGGER_SETUP.md](../../NISSAN_QG18_TRIGGER_SETUP.md).

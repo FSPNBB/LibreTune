@@ -1,7 +1,7 @@
 # LibreTune - Implementation Guide for AI Agents
 
 ## Project Overview
-LibreTune is a modern, open-source ECU tuning software for Speeduino, EpicEFI, and compatible aftermarket ECUs.
+LibreTune is a modern, open-source ECU tuning software for Speeduino, epicEFI, and compatible aftermarket ECUs.
 It's built with Rust core + Tauri desktop app + React frontend.
 
 ## Supported ECU Platforms
@@ -267,7 +267,7 @@ Based on analysis of common ECU tuning software patterns:
 [x] Action Engine Enforcement (validation against INI) - COMPLETED Feb 8, 2026
 [x] Math Channels / Expression Engine - Backend COMPLETED Feb 8, 2026
 [ ] rusEFI console support (text-based command interface) - COMPLETED Feb 1-2, 2026
-  - [x] ECU type detection (Speeduino, RusEFI, FOME, EpicEFI, MS2, MS3)
+  - [x] ECU type detection (Speeduino, RusEFI, FOME, epicEFI, MS2, MS3)
   - [x] Console command pass-through protocol (Step 3 - connection.rs)
   - [x] FOME fast comms with intelligent fallback (Step 5 - settings)
   - [x] Console UI component (Step 6 - EcuConsole.tsx + CSS)

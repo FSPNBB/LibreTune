@@ -1,6 +1,6 @@
 {
   "name": "libretune-app",
-  "description": "Modern ECU tuning software for Speeduino, EpicEFI, and compatible ECUs",
+  "description": "Modern ECU tuning software for Speeduino, epicEFI, and compatible ECUs",
   "version": "0.1.0",
   "private": true,
   "license": "GPL-2.0-only",

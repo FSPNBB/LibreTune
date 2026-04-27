@@ -7,7 +7,7 @@
 LibreTune works with any ECU that uses the standard INI definition format:
 - Speeduino (all versions)
 - rusEFI (all boards)
-- EpicEFI (all versions)
+- epicEFI (all versions)
 - MegaSquirt MS2/MS3 (compatibility mode)
 
 ### Is LibreTune free?

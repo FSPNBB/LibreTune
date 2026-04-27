@@ -265,14 +265,14 @@ than by Keep a Changelog section.
     - Label: "&ECU Console"
     - Target: Opens new tab "console" with title "Console - [EcuType]"
     - Disabled when: no project, not connected, or ECU doesn't support console
-    - Only visible for RusEFI/FOME/EpicEFI ECUs
+    - Only visible for RusEFI/FOME/epicEFI ECUs
     - Keyboard shortcut available: Alt+E (on Windows/Linux)
 - **Status**: TypeScript compilation passes (no console-related errors)
 
 ### ECU Type Detection Infrastructure - Completed Feb 1, 2026
 - **Feature**: rusEFI console support foundation and ECU type detection
 - **Added** (`ini/types.rs`):
-  - `EcuType` enum with variants: Speeduino, RusEFI, FOME, EpicEFI, MS2, MS3, Unknown
+  - `EcuType` enum with variants: Speeduino, RusEFI, FOME, epicEFI, MS2, MS3, Unknown
   - `EcuType::detect()` method identifies ECU from INI signature and filename patterns
   - `supports_console()` method returns true for RusEFI/FOME/epicEFI
   - `is_fome()` method for FOME-specific optimizations

@@ -16,7 +16,7 @@
 //! ## Supported ECUs
 //!
 //! - Speeduino
-//! - EpicEFI
+//! - epicEFI
 //! - Other INI-compatible ECUs
 //!
 //! ## Example

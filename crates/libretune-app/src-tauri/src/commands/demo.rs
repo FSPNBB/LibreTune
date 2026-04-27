@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use tauri::{Emitter, Manager};
 
 /// Enable or disable demo mode (simulated ECU for UI testing)
-/// When enabled, loads a bundled EpicEFI INI and generates simulated sensor data
+/// When enabled, loads a bundled epicEFI INI and generates simulated sensor data
 #[tauri::command]
 pub async fn set_demo_mode(
     app: tauri::AppHandle,

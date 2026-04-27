@@ -38,7 +38,7 @@ pub async fn get_connection_status(
     let (state_val, signature) = if demo_mode {
         (
             ConnectionState::Connected,
-            Some("DEMO - Simulated EpicEFI".to_string()),
+            Some("DEMO - Simulated epicEFI".to_string()),
         )
     } else {
         set_conn_lock_holder("get_connection_status");
