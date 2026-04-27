@@ -1,3 +1,10 @@
+//! LibreTune Tauri application entry point.
+//!
+//! This module wires together the Tauri runtime, application state, and
+//! command handlers. All command implementations live in dedicated modules
+//! under `commands/`. State definitions live in `state.rs`. This file
+//! intentionally contains no business logic — only registration glue.
+
 use libretune_core::autotune::AutoTuneState;
 use libretune_core::datalog::DataLogger;
 use libretune_core::project::OnlineIniRepository;
@@ -5,59 +12,60 @@ use tokio::sync::Mutex;
 
 mod commands;
 mod paths;
-mod port_editor;
+mod port_editor; // used by commands/ini_dialogs.rs
 mod state;
-use commands::annotations::{
-    delete_annotation, get_all_annotations, get_annotation, get_table_annotations, set_annotation,
+
+use state::{AppState, AutoTuneLoadSource, RpmState, RpmStateTracker, StreamStats};
+
+// Re-exports for cross-module use within the crate.
+pub(crate) use commands::app_settings::{
+    get_commit_message_format, load_settings, save_settings, Settings,
 };
-use commands::console::{
-    clear_console_history, get_console_history, get_ecu_type, send_console_command,
+pub(crate) use commands::dash_convert::{convert_dashfile_to_layout, convert_layout_to_dashfile};
+pub(crate) use commands::signature_helpers::{
+    call_connection_factory_and_build_result, compare_signatures, find_matching_inis_internal,
 };
-use commands::csv_io::{export_tune_as_csv, import_tune_from_csv, reset_tune_to_defaults};
-use commands::table_compare::compare_tables;
+pub(crate) use commands::table_internals::{
+    get_table_data_internal, update_constant_array_internal, update_table_z_values_internal,
+    TableData,
+};
+pub(crate) use commands::types::{
+    ConnectResult, ConnectionSettingsResponse, ConnectionStatus, ConstantInfo, CurrentProjectInfo,
+    MatchingIniInfo, SignatureMatchType, SignatureMismatchInfo, SyncProgress, SyncResult,
+};
+pub(crate) use commands::util_helpers::{
+    clean_axis_label, get_conn_lock_holder, parse_runtime_packet_mode, read_raw_value,
+    set_conn_lock_holder, stream_log,
+};
+
+// Tauri command imports — sorted alphabetically by module name.
 use commands::adaptive_timing::{
     disable_adaptive_timing, enable_adaptive_timing, get_adaptive_timing_stats,
 };
-use commands::ini_metadata::{
-    get_ini_capabilities, get_protocol_capabilities, get_protocol_defaults, get_ve_analyze_config,
+use commands::annotations::{
+    delete_annotation, get_all_annotations, get_annotation, get_table_annotations, set_annotation,
 };
-use commands::hotkeys::{
-    get_hotkey_bindings, is_onboarding_completed, mark_onboarding_completed, save_hotkey_bindings,
+use commands::apply_base_map::apply_base_map;
+use commands::autotune_misc::{
+    burn_autotune_recommendations, get_autotune_heatmap, get_autotune_recommendations,
+    lock_autotune_cells, send_autotune_recommendations, stop_autotune, unlock_autotune_cells,
 };
-use commands::tune_health::{
-    get_dyno_table_overlay, get_predicted_fills, get_tune_anomalies, get_tune_health_report,
-};
-use commands::settings::{get_settings, update_heatmap_custom_stops, update_setting};
-use commands::restore_points::{
-    create_restore_point, delete_restore_point, list_restore_points, load_restore_point,
-};
-use commands::ts_import::{import_tunerstudio_project, preview_tunerstudio_import};
+use commands::available_inis::get_available_inis;
 use commands::base_map::generate_base_map;
-use commands::table_ops::{
-    add_offset, fill_region, interpolate_cells, interpolate_linear, rebin_table, scale_cells,
-    set_cells_equal, smooth_table,
-};
-use commands::ini_meta::{
-    get_curves, get_frontpage, get_gauge_config, get_gauge_configs, get_tables,
-};
-use commands::ini_dialogs::{
-    evaluate_expression, get_dialog_definition, get_help_topic, get_indicator_panel,
-    get_port_editor, get_port_editor_assignments, save_port_editor_assignments,
-};
-use commands::channels::{get_available_channels, get_output_channel_status, get_status_bar_defaults};
-use commands::menu::{get_menu_tree, get_searchable_index};
-use commands::constants_read::{get_constant, get_constant_string_value, get_constant_value};
-use commands::project_tune_sync::{
-    compare_project_and_ecu_tunes, mark_tune_modified, save_tune_to_project,
-    write_project_tune_to_ecu,
-};
-use commands::project_mgmt::{
-    close_project, get_current_project, update_project_auto_connect, update_project_connection,
-};
-use commands::project_misc::{delete_project, get_msq_info};
-use commands::project_listing::{get_projects_path, list_projects};
 use commands::cache_status::{get_table_info, get_tune_cache_status};
+use commands::channels::{
+    get_available_channels, get_output_channel_status, get_status_bar_defaults,
+};
+use commands::connect_to_ecu::connect_to_ecu;
 use commands::connection::{auto_load_last_ini, disconnect_ecu, get_connection_status};
+use commands::console::{
+    clear_console_history, get_console_history, get_ecu_type, send_console_command,
+};
+use commands::constant_update::update_constant;
+use commands::constant_values::get_all_constant_values;
+use commands::constants_read::{get_constant, get_constant_string_value, get_constant_value};
+use commands::csv_io::{export_tune_as_csv, import_tune_from_csv, reset_tune_to_defaults};
+use commands::curve_ops::{get_curve_data, update_curve_data};
 use commands::dash_files::{
     create_new_dashboard, delete_dashboard, duplicate_dashboard, export_dashboard, get_dash_file,
     load_tunerstudio_dash, rename_dashboard, save_dash_file, validate_dashboard,
@@ -67,92 +75,91 @@ use commands::dash_layout::{
     list_available_dashes, list_dashboard_layouts, load_dashboard_layout,
     reset_dashboards_to_defaults, save_dashboard_layout,
 };
-use commands::autotune_misc::{
-    burn_autotune_recommendations, get_autotune_heatmap, get_autotune_recommendations,
-    lock_autotune_cells, send_autotune_recommendations, stop_autotune, unlock_autotune_cells,
-};
-use commands::curve_ops::{get_curve_data, update_curve_data};
-use commands::load_pages::load_all_pages;
-use commands::table_update::update_table_data;
-use commands::constant_values::get_all_constant_values;
-use commands::constant_update::update_constant;
-use commands::realtime_stop::stop_realtime_stream;
-use commands::find_inis::find_matching_inis;
-use commands::apply_base_map::apply_base_map;
-use commands::update_project_ini::update_project_ini;
-use commands::demo::{set_demo_mode, get_demo_mode};
-use commands::available_inis::get_available_inis;
-use commands::start_autotune::start_autotune;
-use commands::get_table_data::get_table_data;
-use commands::load_ini::load_ini;
-use commands::save_tune::{save_tune, save_tune_as};
-use commands::connect_to_ecu::connect_to_ecu;
-use commands::sync_ecu_data::sync_ecu_data;
-use commands::load_tune::load_tune;
-use commands::project_lifecycle::{create_project, open_project};
-use commands::realtime_stream::start_realtime_stream;
-pub(crate) use commands::app_settings::{
-    get_commit_message_format, load_settings, save_settings, Settings,
-};
-pub(crate) use commands::signature_helpers::{
-    call_connection_factory_and_build_result, compare_signatures, find_matching_inis_internal,
-};
-pub(crate) use commands::types::{
-    ConnectResult, ConnectionSettingsResponse, ConnectionStatus, ConstantInfo, CurrentProjectInfo,
-    MatchingIniInfo, SignatureMatchType, SignatureMismatchInfo, SyncProgress, SyncResult,
-};
-pub(crate) use commands::util_helpers::{
-    clean_axis_label, get_conn_lock_holder, parse_runtime_packet_mode,
-    read_raw_value, set_conn_lock_holder, stream_log,
-};
-pub(crate) use commands::dash_convert::{convert_dashfile_to_layout, convert_layout_to_dashfile};
-pub(crate) use commands::table_internals::{
-    get_table_data_internal, update_constant_array_internal, update_table_z_values_internal,
-    TableData,
-};
-use commands::debug_realtime::debug_single_realtime_read;
-use commands::realtime_get::get_realtime_data;
-use commands::metrics::stop_metrics_task;
-use commands::tune_info::{get_tune_info, new_tune};
-use commands::tune_io::{burn_to_ecu, execute_controller_command, list_tune_files};
-use commands::tune_misc::{update_constant_string, use_ecu_tune, use_project_tune};
 use commands::data_logging::{
     clear_log, get_log_entries, get_logging_status, read_text_file, save_log, start_logging,
     stop_logging,
 };
+use commands::debug_realtime::debug_single_realtime_read;
+use commands::demo::{get_demo_mode, set_demo_mode};
 use commands::diagnostic_loggers::{
     start_composite_logger, start_tooth_logger, stop_composite_logger, stop_tooth_logger,
 };
 use commands::dyno::{compare_dyno_runs, detect_dyno_headers, load_dyno_run};
-use commands::tune_compare::{compare_tune_files, merge_from_tune};
-use commands::tune_migration::{
-    clear_migration_report, get_migration_report, get_tune_constant_manifest, get_tune_ini_metadata,
-};
+use commands::find_inis::find_matching_inis;
+use commands::get_table_data::get_table_data;
 use commands::git::{
     git_checkout, git_commit, git_create_branch, git_current_branch, git_diff, git_has_changes,
     git_has_repo, git_history, git_init_project, git_list_branches, git_switch_branch,
 };
+use commands::hotkeys::{
+    get_hotkey_bindings, is_onboarding_completed, mark_onboarding_completed, save_hotkey_bindings,
+};
+use commands::ini_dialogs::{
+    evaluate_expression, get_dialog_definition, get_help_topic, get_indicator_panel,
+    get_port_editor, get_port_editor_assignments, save_port_editor_assignments,
+};
+use commands::ini_meta::{
+    get_curves, get_frontpage, get_gauge_config, get_gauge_configs, get_tables,
+};
+use commands::ini_metadata::{
+    get_ini_capabilities, get_protocol_capabilities, get_protocol_defaults, get_ve_analyze_config,
+};
 use commands::ini_repository::{
     import_ini, init_ini_repository, list_repository_inis, remove_ini, scan_for_inis,
 };
+use commands::load_ini::load_ini;
+use commands::load_pages::load_all_pages;
+use commands::load_tune::load_tune;
 use commands::lua::run_lua_script;
-use commands::online_ini::{check_internet_connectivity, download_ini, search_online_inis};
 use commands::math_channels::{
     delete_math_channel, get_math_channels, set_math_channel, validate_math_expression,
 };
+use commands::menu::{get_menu_tree, get_searchable_index};
+use commands::metrics::stop_metrics_task;
+use commands::online_ini::{check_internet_connectivity, download_ini, search_online_inis};
+use commands::project_lifecycle::{create_project, open_project};
+use commands::project_listing::{get_projects_path, list_projects};
+use commands::project_mgmt::{
+    close_project, get_current_project, update_project_auto_connect, update_project_connection,
+};
+use commands::project_misc::{delete_project, get_msq_info};
+use commands::project_tune_sync::{
+    compare_project_and_ecu_tunes, mark_tune_modified, save_tune_to_project,
+    write_project_tune_to_ecu,
+};
+use commands::realtime_get::get_realtime_data;
+use commands::realtime_stop::stop_realtime_stream;
+use commands::realtime_stream::start_realtime_stream;
+use commands::restore_points::{
+    create_restore_point, delete_restore_point, list_restore_points, load_restore_point,
+};
+use commands::save_tune::{save_tune, save_tune_as};
+use commands::settings::{get_settings, update_heatmap_custom_stops, update_setting};
+use commands::start_autotune::start_autotune;
+use commands::sync_ecu_data::sync_ecu_data;
 use commands::system::{get_build_info, get_serial_ports};
+use commands::table_compare::compare_tables;
+use commands::table_ops::{
+    add_offset, fill_region, interpolate_cells, interpolate_linear, rebin_table, scale_cells,
+    set_cells_equal, smooth_table,
+};
+use commands::table_update::update_table_data;
+use commands::ts_import::{import_tunerstudio_project, preview_tunerstudio_import};
+use commands::tune_compare::{compare_tune_files, merge_from_tune};
+use commands::tune_health::{
+    get_dyno_table_overlay, get_predicted_fills, get_tune_anomalies, get_tune_health_report,
+};
+use commands::tune_info::{get_tune_info, new_tune};
+use commands::tune_io::{burn_to_ecu, execute_controller_command, list_tune_files};
+use commands::tune_migration::{
+    clear_migration_report, get_migration_report, get_tune_constant_manifest, get_tune_ini_metadata,
+};
+use commands::tune_misc::{update_constant_string, use_ecu_tune, use_project_tune};
+use commands::update_project_ini::update_project_ini;
 use commands::wasm_plugin::{
     execute_wasm_plugin, get_wasm_plugin_info, list_wasm_plugins, load_wasm_plugin,
     unload_wasm_plugin,
 };
-// port_editor module used by commands/ini_dialogs.rs
-use state::{
-    AppState, AutoTuneLoadSource, RpmState,
-    RpmStateTracker, StreamStats,
-};
-
-
-
 
 
 
