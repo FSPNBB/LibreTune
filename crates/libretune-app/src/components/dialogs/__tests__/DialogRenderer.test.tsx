@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import DialogRenderer, { DialogDefinition } from '../DialogRenderer';
-import { ToastProvider } from '../../ToastContext';
+import { ToastProvider } from '../../../contexts/ToastContext';
 import { setupTauriMocks, tearDownTauriMocks } from '../../../test-utils/tauriMocks';
 import { vi } from 'vitest';
 

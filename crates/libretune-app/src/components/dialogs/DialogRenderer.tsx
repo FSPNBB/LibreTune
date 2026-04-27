@@ -4,7 +4,7 @@ import { ArrowLeft, Activity, Grid3X3, HelpCircle, AlertTriangle } from 'lucide-
 import CurveEditor, { SimpleGaugeInfo } from '../curves/CurveEditor';
 import TableEditor2D from '../tables/TableEditor2D';
 import './DialogRenderer.css';
-import { useToast } from '../ToastContext';
+import { useToast } from '../../contexts/ToastContext';
 
 interface DialogComponent {
   type: 'Panel' | 'Field' | 'LiveGraph' | 'Table' | 'Label' | 'Indicator' | 'CommandButton';

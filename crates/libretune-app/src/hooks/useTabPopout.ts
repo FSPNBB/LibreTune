@@ -3,7 +3,7 @@ import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import type { Tab } from "../components/tuner-ui";
 import type { TabContent } from "../types/app";
-import type { ToastType } from "../components/ToastContext";
+import type { ToastType } from "../contexts/ToastContext";
 
 export interface UseTabPopoutDeps {
   tabs: Tab[];

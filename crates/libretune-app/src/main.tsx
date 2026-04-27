@@ -2,9 +2,9 @@ import React, { useState, useEffect } from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import PopOutWindow from "./PopOutWindow";
-import { LoadingProvider } from "./components/LoadingContext";
-import { ToastProvider } from "./components/ToastContext";
-import { UnitPreferencesProvider } from "./utils/useUnitPreferences";
+import { LoadingProvider } from "./contexts/LoadingContext";
+import { ToastProvider } from "./contexts/ToastContext";
+import { UnitPreferencesProvider } from "./contexts/useUnitPreferences";
 // Initialize i18next (side-effect: configures the global i18n instance).
 // Must be imported before any component that calls `useTranslation()`.
 import "./i18n";

@@ -6,7 +6,7 @@ import { vi } from 'vitest';
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn() }));
 
 import { invoke } from '@tauri-apps/api/core';
-import { UnitPreferencesProvider } from '../../../utils/useUnitPreferences';
+import { UnitPreferencesProvider } from '../../../contexts/useUnitPreferences';
 
 import { SettingsDialog } from '../Dialogs';
 

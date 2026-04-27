@@ -4,7 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { HeatmapScheme, getAvailableSchemes } from '../../utils/heatmapColors';
-import { useUnitPreferences } from '../../utils/useUnitPreferences';
+import { useUnitPreferences } from '../../contexts/useUnitPreferences';
 import { TemperatureUnit, PressureUnit, AfrUnit, SpeedUnit, FuelType, STOICH_AFR } from '../../utils/unitConversions';
 import { createFocusTrap, focusFirstElement } from '../../utils/focusManagement';
 import HotkeyEditor from '../dialogs/HotkeyEditor';

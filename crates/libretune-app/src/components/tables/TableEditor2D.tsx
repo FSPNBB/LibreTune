@@ -8,7 +8,7 @@ import RebinDialog from '../dialogs/RebinDialog';
 import CellEditDialog from '../dialogs/CellEditDialog';
 import { useHeatmapSettings } from '../../utils/useHeatmapSettings';
 import { useChannels } from '../../stores/realtimeStore';
-import { useToast } from '../ToastContext';
+import { useToast } from '../../contexts/ToastContext';
 import { getHotkeyManager } from '../../services/hotkeyService';
 import './TableComponents.css';
 import './TableEditor2D.css';

@@ -21,7 +21,7 @@ import {
   SpeedUnit,
   STOICH_AFR,
   getUnitLabel,
-} from './unitConversions';
+} from '../utils/unitConversions';
 
 const STORAGE_KEY = 'libretune-unit-preferences';
 

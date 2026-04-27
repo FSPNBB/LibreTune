@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Gamepad2, AlertTriangle } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTheme, ThemeName, THEME_INFO } from "../themes";
-import { useToast } from "./ToastContext";
+import { useToast } from "../contexts/ToastContext";
 
 // Settings view
 export function SettingsView() {

@@ -11,9 +11,9 @@ vi.mock('@tauri-apps/api/window', () => ({
 }));
 
 
-import { LoadingProvider } from '../components/LoadingContext';
-import { ToastProvider } from '../components/ToastContext';
-import { UnitPreferencesProvider } from '../utils/useUnitPreferences';
+import { LoadingProvider } from '../contexts/LoadingContext';
+import { ToastProvider } from '../contexts/ToastContext';
+import { UnitPreferencesProvider } from '../contexts/useUnitPreferences';
 import { invoke } from '@tauri-apps/api/core';
 // Note: `App` is imported dynamically inside tests after test-level mocks are installed
 // so that module-level imports (e.g., `listen`) pick up our patched implementations.
