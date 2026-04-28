@@ -6,9 +6,9 @@
  * Wrapped in React.memo with custom comparator for performance optimization.
  */
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { TsGaugeConfig, TsColor, tsColorToRgba, tsColorToHex } from '../dashboards/dashTypes';
-import { useRealtimeStore, getChannelHistoryBuffer } from '../../stores/realtimeStore';
+import { getChannelHistoryBuffer } from '../../stores/realtimeStore';
 import {
   roundRect,
   lightenColor,
@@ -20,6 +20,7 @@ import {
   isFontLoaded,
   loadEmbeddedAssets,
 } from './assetCache';
+import { useGaugeRenderer } from './useGaugeRenderer';
 
 interface TsGaugeProps {
   config: TsGaugeConfig;
@@ -30,45 +31,12 @@ interface TsGaugeProps {
   overrideStore?: boolean;
 }
 
-// Lerp factor per animation frame (25% of remaining distance → reaches within 1% in ~17 frames ≈ 280ms @ 60fps)
-const ANIMATION_LERP = 0.25;
-
 /**
  * Internal TsGauge component - wrapped in React.memo below
  */
 function TsGaugeInner({ config, value, embeddedImages, legacyMode = false, overrideStore = false }: TsGaugeProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [fontsReady, setFontsReady] = useState(false);
   const [imagesReady, setImagesReady] = useState(false);
-
-  // Clamp the incoming prop value to min/max
-  const clampedValue = config.peg_limits
-    ? Math.max(config.min, Math.min(config.max, value))
-    : value;
-
-  // displayValueRef holds the CURRENTLY DISPLAYED (smoothly animated) value.
-  // All draw functions read displayValueRef.current via closure.
-  const displayValueRef = useRef(clampedValue);
-
-  // targetRef holds the ANIMATION TARGET — updated by:
-  //   1. Direct Zustand store subscription (live ECU data, bypasses React render)
-  //   2. Prop changes when overrideStore is true (sweep/demo modes)
-  const targetRef = useRef(clampedValue);
-
-  // Ref to the "kick animation" function — set inside the main render effect.
-  // Called by the prop-sync effect when sweep/demo values change.
-  const startAnimationRef = useRef<(() => void) | null>(null);
-
-  // Track overrideStore in a ref so the animation loop closure always has current value.
-  const overrideStoreRef = useRef(overrideStore);
-  overrideStoreRef.current = overrideStore;
-
-  // Sync targetRef when overrideStore is true (sweep/demo mode).
-  useEffect(() => {
-    if (!overrideStore) return;
-    targetRef.current = clampedValue;
-    if (startAnimationRef.current) startAnimationRef.current();
-  }, [clampedValue, overrideStore]);
 
   // Load embedded fonts and images
   useEffect(() => {
@@ -172,127 +140,16 @@ function TsGaugeInner({ config, value, embeddedImages, legacyMode = false, overr
     return config.font_color;
   }, [config]);
 
-  // Ref to track the pending animation frame ID
-  const rafIdRef = useRef<number | null>(null);
-
-  // Frame limiter: cap drawing to ~30fps per gauge to avoid overwhelming the GPU.
-  // With 10+ gauges each running at 60fps, the browser can't keep up with 600+ canvas
-  // draws per second (each AnalogGauge draw creates gradients, arcs, text = 2-5ms).
-  // By limiting to 30fps per gauge, total draws drop to ~300/sec, well within budget.
-  const DRAW_INTERVAL_MS = 33; // ~30fps per gauge
-  const lastDrawTimeRef = useRef(0);
-
-  // Cached canvas dimensions — updated only by ResizeObserver, NOT every frame.
-  // Setting canvas.width/height destroys and reallocates the GPU buffer, so we must
-  // avoid doing it on every animation frame.  With 10-20 gauges at 60fps that would
-  // mean 600-1200 buffer re-creations/sec, which freezes the browser completely.
-  const canvasSizeRef = useRef<{ w: number; h: number; cssW: number; cssH: number }>({
-    w: 0, h: 0, cssW: 0, cssH: 0,
-  });
-
-  // ResizeObserver: watches the canvas element and updates the backing-store size
-  // only when the actual CSS size changes.
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const syncSize = () => {
-      const rect = canvas.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) return;
-      const dpr = window.devicePixelRatio || 1;
-      const newW = Math.round(rect.width * dpr);
-      const newH = Math.round(rect.height * dpr);
-      const cur = canvasSizeRef.current;
-      if (cur.w !== newW || cur.h !== newH) {
-        canvas.width = newW;
-        canvas.height = newH;
-        canvasSizeRef.current = { w: newW, h: newH, cssW: rect.width, cssH: rect.height };
-        // Kick animation to redraw at new size
-        if (startAnimationRef.current) startAnimationRef.current();
-      }
-    };
-
-    // Initial size sync
-    syncSize();
-
-    const ro = new ResizeObserver(() => syncSize());
-    ro.observe(canvas);
-    return () => ro.disconnect();
-  }, []);
-
-  // Main animation/render effect.
-  // Self-contained: the animation loop reads the store value imperatively each frame
-  // (via getState(), NOT via subscribe). This eliminates the fragile cross-effect ref
-  // sharing that caused gauges to freeze when the animation effect re-ran and the
-  // subscription still held a stale startAnimationRef.
-  //
-  // When overrideStore is true (sweep/demo), targetRef is driven by the prop-sync
-  // effect above instead. The loop always runs regardless; it just doesn't read the
-  // store during sweep/demo.
-  useEffect(() => {
-    if (!fontsReady || !imagesReady) return;
-
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    // Cancel any in-progress animation for this gauge
-    if (rafIdRef.current !== null) {
-      cancelAnimationFrame(rafIdRef.current);
-      rafIdRef.current = null;
-    }
-
-    // Channel lookup variables — cached after first successful resolution.
-    const channel = config.output_channel || '';
-    const channelLower = channel.toLowerCase();
-    let resolvedKey: string | null = null;
-
-    // Stop animating when within 0.1% of the gauge range of the target
-    const epsilon = Math.max((config.max - config.min) * 0.001, 0.01);
-
-    /** Look up the channel value in the store (case-insensitive with caching). */
-    const readStoreValue = (): number | undefined => {
-      const channels = useRealtimeStore.getState().channels;
-      if (resolvedKey !== null) {
-        return channels[resolvedKey];
-      }
-      // Try exact match
-      let val = channels[channel];
-      if (val !== undefined) { resolvedKey = channel; return val; }
-      // Try lowercase
-      val = channels[channelLower];
-      if (val !== undefined) { resolvedKey = channelLower; return val; }
-      // One-time full scan (O(n) keys, happens only once per gauge instance)
-      for (const key of Object.keys(channels)) {
-        if (key.toLowerCase() === channelLower) {
-          resolvedKey = key;
-          return channels[key];
-        }
-      }
-      return undefined;
-    };
-
-    /** Draw one frame using displayValueRef.current as the gauge value */
-    const drawFrame = () => {
-      const { w, h, cssW, cssH } = canvasSizeRef.current;
-      if (w === 0 || h === 0) return;
-      const dpr = w / cssW;
-      // DO NOT set canvas.width/height here — that destroys the GPU buffer.
-      // ResizeObserver handles resizing when the container size actually changes.
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.scale(dpr, dpr);
-      ctx.clearRect(0, 0, cssW, cssH);
-      if (config.antialiasing_on === false) {
-        ctx.imageSmoothingEnabled = false;
-      } else {
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-      }
+  /**
+   * Per-frame painter: dispatches to one of the inline `drawXxx`
+   * closures based on `config.gauge_painter`. Receives the smoothly
+   * animated `displayValue` from the renderer host; the painter
+   * closures still read it via the `displayValueRef` they close over.
+   */
+  const paint = useCallback(
+    (ctx: CanvasRenderingContext2D, cssW: number, cssH: number, _displayValue: number) => {
       const needleImage = getEmbeddedImage(config.needle_image_file_name);
       const bgImage = getEmbeddedImage(config.background_image_file_name);
-      // All draw functions read displayValueRef.current via closure
       switch (config.gauge_painter) {
         case 'BasicReadout':
           drawBasicReadout(ctx, cssW, cssH, bgImage);
@@ -347,92 +204,22 @@ function TsGaugeInner({ config, value, embeddedImages, legacyMode = false, overr
         default:
           drawBasicReadout(ctx, cssW, cssH, bgImage);
       }
-    };
+    },
+    // The painter closures themselves close over `config`, helpers, and
+    // `displayValueRef`; we only need to refresh `paint` when the
+    // dispatch key or config-derived inputs change. The hook stores the
+    // callback in a ref, so we don't pay an effect-restart cost.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [config, getEmbeddedImage],
+  );
 
-    /** Animation loop: runs continuously while the gauge is mounted.
-     *  In normal mode: reads latest value from the store each frame (imperatively via getState).
-     *  In override mode (sweep/demo): targetRef is set by the prop-sync effect instead.
-     *  Drawing is throttled to ~30fps to avoid overwhelming the GPU.
-     *  The loop idles (stops rAF) when displayValue has converged to target—
-     *  but a 100ms watchdog interval re-checks the store to catch new values.
-     */
-    let loopActive = true;
-
-    const animate = (timestamp: number) => {
-      if (!loopActive) return;
-
-      // In normal mode, read the store each frame to pick up new data.
-      if (!overrideStoreRef.current && channel) {
-        const raw = readStoreValue();
-        if (raw !== undefined) {
-          const peg = config.peg_limits;
-          const clamped = peg ? Math.max(config.min, Math.min(config.max, raw)) : raw;
-          targetRef.current = clamped;
-        }
-      }
-
-      const target = targetRef.current;
-      const diff = target - displayValueRef.current;
-      if (Math.abs(diff) > epsilon) {
-        displayValueRef.current = displayValueRef.current + diff * ANIMATION_LERP;
-        // Only draw if enough time has passed since last draw
-        if (timestamp - lastDrawTimeRef.current >= DRAW_INTERVAL_MS) {
-          drawFrame();
-          lastDrawTimeRef.current = timestamp;
-        }
-        rafIdRef.current = requestAnimationFrame(animate);
-      } else {
-        // Snap to target and always draw final frame
-        displayValueRef.current = target;
-        drawFrame();
-        lastDrawTimeRef.current = timestamp;
-        // Loop goes idle — the watchdog interval below will restart if needed.
-        rafIdRef.current = null;
-      }
-    };
-
-    /** Kick the animation loop if it is not already running. */
-    const kickAnimation = () => {
-      if (loopActive && rafIdRef.current === null) {
-        rafIdRef.current = requestAnimationFrame(animate);
-      }
-    };
-
-    // Expose kickAnimation so the prop-sync effect can restart it during sweep.
-    startAnimationRef.current = kickAnimation;
-
-    // Initial animation kick
-    rafIdRef.current = requestAnimationFrame(animate);
-
-    // Watchdog: when the rAF loop is idle (converged), periodically check the store
-    // for new values. This is the safety net — costs nothing when values are stable
-    // (one hash lookup per gauge every 100ms = ~100 lookups/sec total for 10 gauges).
-    const watchdog = setInterval(() => {
-      if (!loopActive || overrideStoreRef.current || !channel) return;
-      if (rafIdRef.current !== null) return; // Already animating
-      const raw = readStoreValue();
-      if (raw !== undefined) {
-        const peg = config.peg_limits;
-        const clamped = peg ? Math.max(config.min, Math.min(config.max, raw)) : raw;
-        if (Math.abs(clamped - displayValueRef.current) > epsilon) {
-          targetRef.current = clamped;
-          kickAnimation();
-        }
-      }
-    }, 100);
-
-    return () => {
-      loopActive = false;
-      startAnimationRef.current = null;
-      clearInterval(watchdog);
-      if (rafIdRef.current !== null) {
-        cancelAnimationFrame(rafIdRef.current);
-        rafIdRef.current = null;
-      }
-    };
-    // Note: clampedValue intentionally NOT in deps — target is driven by targetRef,
-    // updated by store subscription (live data) and clampedValue sync effect (sweep/demo).
-  }, [config, embeddedImages, fontsReady, imagesReady, legacyMode, getValueColor, getEmbeddedImage, getFontFamily]);
+  const { canvasRef, displayValueRef } = useGaugeRenderer({
+    config,
+    value,
+    overrideStore,
+    enabled: fontsReady && imagesReady,
+    paint,
+  });
 
   /** Draw digital readout (LCD style) with improved visuals */
   const drawBasicReadout = (
