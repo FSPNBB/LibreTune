@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { DashFile, TsGaugeConfig, DashComponent, isGauge, isIndicator } from './dashTypes';
 import PropertyEditor from './designer/PropertyEditor';
+import { useDesignerHistory } from './designer/useDesignerHistory';
 import './DashboardDesigner.css';
 
 interface ChannelInfo {
@@ -47,11 +48,6 @@ interface DashboardDesignerProps {
   onSave: () => void;
   onExit: () => void;
   channelInfoMap?: Record<string, ChannelInfo>; // INI channel metadata for gauge creation
-}
-
-interface HistoryEntry {
-  dashFile: DashFile;
-  description: string;
 }
 
 interface DragState {
@@ -92,11 +88,21 @@ export default function DashboardDesigner({
   channelInfoMap = {},
 }: DashboardDesignerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  
-  // History for undo/redo
-  const [history, setHistory] = useState<HistoryEntry[]>([{ dashFile, description: 'Initial' }]);
-  const [historyIndex, setHistoryIndex] = useState(0);
-  
+
+  // Undo/redo + clipboard + delete + selected component (extracted hook).
+  const {
+    selectedComponent,
+    pushHistory,
+    undo: handleUndo,
+    redo: handleRedo,
+    remove: handleDelete,
+    copy: handleCopy,
+    paste: handlePaste,
+    canUndo,
+    canRedo,
+    hasClipboard,
+  } = useDesignerHistory({ dashFile, selectedGaugeId, onDashFileChange, onSelectGauge });
+
   // Drag and resize states
   const [dragState, setDragState] = useState<DragState>({
     isDragging: false,
@@ -118,124 +124,12 @@ export default function DashboardDesigner({
     startRelativeY: 0,
     gaugeId: null,
   });
-  
-  // Clipboard for copy/paste
-  const [clipboard, setClipboard] = useState<DashComponent | null>(null);
-  
-  // Get selected gauge/indicator config
-  const selectedComponent = selectedGaugeId 
-    ? dashFile.gauge_cluster.components.find(c => {
-        if (isGauge(c)) return c.Gauge.id === selectedGaugeId;
-        if (isIndicator(c)) return c.Indicator.id === selectedGaugeId;
-        return false;
-      })
-    : null;
 
   // Snap value to grid
   const snapToGrid = useCallback((value: number): number => {
     if (gridSnap <= 0) return value;
     return Math.round(value / (gridSnap / 100)) * (gridSnap / 100);
   }, [gridSnap]);
-
-  // Add history entry
-  const pushHistory = useCallback((newFile: DashFile, description: string) => {
-    setHistory(prev => {
-      const newHistory = prev.slice(0, historyIndex + 1);
-      newHistory.push({ dashFile: newFile, description });
-      return newHistory;
-    });
-    setHistoryIndex(prev => prev + 1);
-  }, [historyIndex]);
-
-  // Undo
-  const handleUndo = useCallback(() => {
-    if (historyIndex > 0) {
-      const newIndex = historyIndex - 1;
-      setHistoryIndex(newIndex);
-      onDashFileChange(history[newIndex].dashFile);
-    }
-  }, [historyIndex, history, onDashFileChange]);
-
-  // Redo
-  const handleRedo = useCallback(() => {
-    if (historyIndex < history.length - 1) {
-      const newIndex = historyIndex + 1;
-      setHistoryIndex(newIndex);
-      onDashFileChange(history[newIndex].dashFile);
-    }
-  }, [historyIndex, history, onDashFileChange]);
-
-  // Delete selected gauge
-  const handleDelete = useCallback(() => {
-    if (!selectedGaugeId) return;
-    
-    const newComponents = dashFile.gauge_cluster.components.filter(c => {
-      if (isGauge(c)) return c.Gauge.id !== selectedGaugeId;
-      if (isIndicator(c)) return c.Indicator.id !== selectedGaugeId;
-      return true;
-    });
-    
-    const newFile: DashFile = {
-      ...dashFile,
-      gauge_cluster: {
-        ...dashFile.gauge_cluster,
-        components: newComponents,
-      },
-    };
-    
-    pushHistory(newFile, `Delete ${selectedGaugeId}`);
-    onDashFileChange(newFile);
-    onSelectGauge(null);
-  }, [selectedGaugeId, dashFile, pushHistory, onDashFileChange, onSelectGauge]);
-
-  // Copy selected gauge
-  const handleCopy = useCallback(() => {
-    if (!selectedComponent) return;
-    setClipboard(JSON.parse(JSON.stringify(selectedComponent)));
-  }, [selectedComponent]);
-
-  // Paste from clipboard
-  const handlePaste = useCallback(() => {
-    if (!clipboard) return;
-    
-    // Create new component with unique ID and offset position
-    let newComponent: DashComponent;
-    
-    if (isGauge(clipboard)) {
-      const gauge = clipboard.Gauge;
-      newComponent = {
-        Gauge: {
-          ...gauge,
-          id: `gauge-${Date.now()}`,
-          relative_x: (gauge.relative_x ?? 0) + 0.05,
-          relative_y: (gauge.relative_y ?? 0) + 0.05,
-        },
-      };
-    } else if (isIndicator(clipboard)) {
-      const indicator = clipboard.Indicator;
-      newComponent = {
-        Indicator: {
-          ...indicator,
-          id: `indicator-${Date.now()}`,
-          relative_x: (indicator.relative_x ?? 0) + 0.05,
-          relative_y: (indicator.relative_y ?? 0) + 0.05,
-        },
-      };
-    } else {
-      return;
-    }
-    
-    const newFile: DashFile = {
-      ...dashFile,
-      gauge_cluster: {
-        ...dashFile.gauge_cluster,
-        components: [...dashFile.gauge_cluster.components, newComponent],
-      },
-    };
-    
-    pushHistory(newFile, 'Paste gauge');
-    onDashFileChange(newFile);
-  }, [clipboard, dashFile, pushHistory, onDashFileChange]);
 
   // Handle mouse down on gauge for dragging
   const handleGaugeMouseDown = useCallback((e: React.MouseEvent, gaugeId: string, component: DashComponent) => {
@@ -607,7 +501,7 @@ export default function DashboardDesigner({
           <button 
             className="toolbar-btn"
             onClick={handleUndo}
-            disabled={historyIndex <= 0}
+            disabled={!canUndo}
             title="Undo (Ctrl+Z)"
           >
             <Undo2 size={16} />
@@ -615,7 +509,7 @@ export default function DashboardDesigner({
           <button 
             className="toolbar-btn"
             onClick={handleRedo}
-            disabled={historyIndex >= history.length - 1}
+            disabled={!canRedo}
             title="Redo (Ctrl+Y)"
           >
             <Redo2 size={16} />
@@ -636,7 +530,7 @@ export default function DashboardDesigner({
           <button 
             className="toolbar-btn"
             onClick={handlePaste}
-            disabled={!clipboard}
+            disabled={!hasClipboard}
             title="Paste (Ctrl+V)"
           >
             <Clipboard size={16} />
