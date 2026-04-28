@@ -8,12 +8,10 @@ import {
   tsColorToRgba,
 } from './dashTypes';
 
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Plus, Copy, Pencil, Trash2, Save, RotateCw, AlertTriangle, Compass, X, FolderOpen } from 'lucide-react';
 import { useRealtimeStore } from '../../stores/realtimeStore';
 import { invoke } from '@tauri-apps/api/core';
-import { listen, UnlistenFn } from '@tauri-apps/api/event';
-import { save } from '@tauri-apps/plugin-dialog';
 import TsGauge from '../gauges/TsGauge';
 import GaugeContextMenu, { ContextMenuState } from './GaugeContextMenu';
 import ImportDashboardDialog from '../dialogs/ImportDashboardDialog';
@@ -33,6 +31,8 @@ import { useGaugeSweep } from './hooks/useGaugeSweep';
 import { useGaugeDemo } from './hooks/useGaugeDemo';
 import { useDashboardScale } from './hooks/useDashboardScale';
 import { useDashboardValidation } from './hooks/useDashboardValidation';
+import { useDashboardCRUD } from './hooks/useDashboardCRUD';
+import { useGaugeRangeSync } from './hooks/useGaugeRangeSync';
 import './TsDashboard.css';
 
 /**
@@ -53,23 +53,8 @@ interface ChannelInfo {
   translate: number;
 }
 
-interface GaugeInfo {
-  name: string;
-  channel: string;
-  title: string;
-  units: string;
-  lo: number;
-  hi: number;
-  low_warning: number;
-  high_warning: number;
-  low_danger: number;
-  high_danger: number;
-  digits: number;
-}
-
 export default function TsDashboard({ initialDashPath, isConnected = false }: TsDashboardProps) {
   const [dashFile, setDashFile] = useState<DashFile | null>(null);
-  const [availableDashes, setAvailableDashes] = useState<DashFileInfo[]>([]);
   const [selectedPath, setSelectedPath] = useState<string>(initialDashPath || '');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -108,10 +93,7 @@ export default function TsDashboard({ initialDashPath, isConnected = false }: Ts
   const [renameName, setRenameName] = useState('');
   const [legacyMode, setLegacyMode] = useState(false);
   const [compatBarVisible, setCompatBarVisible] = useState(true);
-  const [syncToken, setSyncToken] = useState(0);
-  const [autoSyncGaugeRanges, setAutoSyncGaugeRanges] = useState(true);
   const [showValidationPanel, setShowValidationPanel] = useState(false);
-  const initialSyncDoneRef = useRef(false);
 
   // Build embedded images map — memoized so TsGauge's React.memo and
   // animation effect don't re-run on every TsDashboard render.
@@ -192,158 +174,23 @@ export default function TsDashboard({ initialDashPath, isConnected = false }: Ts
   }, []);
 
   // Reload default gauges
-  const handleReloadDefaultGauges = useCallback(async () => {
-    // Reload the current dashboard from file
-    if (selectedPath) {
-      try {
-        const file = await invoke<DashFile>('get_dash_file', { path: selectedPath });
-        setDashFile(file);
-      } catch (e) {
-        console.error('Failed to reload dashboard:', e);
-      }
-    }
-  }, [selectedPath]);
+  // Dashboard CRUD operations (list, save, new, rename, delete, duplicate, export, import).
+  const {
+    availableDashes,
+    refreshDashboardList,
+    reloadCurrentDashboard,
+    saveDashboard,
+    createDashboard,
+    renameDashboard,
+    deleteDashboard,
+    duplicateDashboard,
+    exportDashboard,
+    onImportComplete,
+  } = useDashboardCRUD({ dashFile, selectedPath, setSelectedPath, setDashFile });
 
-  // Save dashboard to file
-  const handleSaveDashboard = useCallback(async () => {
-    if (!dashFile || !selectedPath) return;
-    
-    try {
-      await invoke('save_dash_file', { 
-        path: selectedPath,
-        dashFile: dashFile,
-      });
-      console.log('Dashboard saved successfully');
-    } catch (e) {
-      console.error('Failed to save dashboard:', e);
-    }
-  }, [dashFile, selectedPath]);
-
-  // Sync gauge ranges from INI GaugeConfigurations
-  const handleSyncGaugeRanges = useCallback(async () => {
-    if (!dashFile) return;
-
-    try {
-      const gauges = await invoke<GaugeInfo[]>('get_gauge_configs');
-      const byChannel = new Map(gauges.map(g => [g.channel.toLowerCase(), g]));
-      const byName = new Map(gauges.map(g => [g.name.toLowerCase(), g]));
-
-      const updatedComponents = dashFile.gauge_cluster.components.map((comp) => {
-        if (!isGauge(comp)) return comp;
-
-        const gauge = comp.Gauge;
-        const channelKey = (gauge.output_channel || '').toLowerCase();
-        const nameKey = (gauge.title || '').toLowerCase();
-        const info = byChannel.get(channelKey) || byName.get(nameKey);
-        if (!info) return comp;
-
-        return {
-          Gauge: {
-            ...gauge,
-            min: info.lo,
-            max: info.hi,
-            units: info.units,
-            low_warning: Number.isFinite(info.low_warning) ? info.low_warning : gauge.low_warning,
-            high_warning: Number.isFinite(info.high_warning) ? info.high_warning : gauge.high_warning,
-            low_critical: Number.isFinite(info.low_danger) ? info.low_danger : gauge.low_critical,
-            high_critical: Number.isFinite(info.high_danger) ? info.high_danger : gauge.high_critical,
-            value_digits: Number.isFinite(info.digits) ? info.digits : gauge.value_digits,
-          },
-        };
-      });
-
-      setDashFile({
-        ...dashFile,
-        gauge_cluster: { ...dashFile.gauge_cluster, components: updatedComponents },
-      });
-    } catch (e) {
-      console.warn('Failed to sync gauge ranges from INI:', e);
-    }
-  }, [dashFile]);
-
-  // Auto-sync once on initial dashboard load
-  useEffect(() => {
-    if (!dashFile) return;
-    if (!autoSyncGaugeRanges) return;
-    if (initialSyncDoneRef.current) return;
-    initialSyncDoneRef.current = true;
-    handleSyncGaugeRanges();
-  }, [dashFile, handleSyncGaugeRanges, autoSyncGaugeRanges]);
-
-  // Auto-sync on INI/definition changes
-  useEffect(() => {
-    if (!dashFile) return;
-    if (!autoSyncGaugeRanges) return;
-    if (syncToken === 0) return;
-    handleSyncGaugeRanges();
-  }, [syncToken, dashFile, handleSyncGaugeRanges, autoSyncGaugeRanges]);
-
-  // Load auto-sync preference
-  useEffect(() => {
-    invoke<any>('get_settings')
-      .then((settings) => {
-        if (settings.auto_sync_gauge_ranges !== undefined) {
-          setAutoSyncGaugeRanges(!!settings.auto_sync_gauge_ranges);
-        }
-      })
-      .catch((e) => console.warn('[TsDashboard] get_settings failed:', e));
-  }, []);
-
-  useEffect(() => {
-    let unlistenIni: UnlistenFn | null = null;
-    let unlistenDefLoaded: UnlistenFn | null = null;
-    let unlistenDefChanged: UnlistenFn | null = null;
-    let unlistenSettings: UnlistenFn | null = null;
-
-    (async () => {
-      try {
-        unlistenIni = await listen('ini:changed', () => {
-          setSyncToken((v) => v + 1);
-        });
-      } catch (e) {
-        console.warn('[TsDashboard] Failed to listen for ini:changed:', e);
-      }
-
-      try {
-        unlistenDefLoaded = await listen('definition:loaded', () => {
-          setSyncToken((v) => v + 1);
-        });
-      } catch (e) {
-        console.warn('[TsDashboard] Failed to listen for definition:loaded:', e);
-      }
-
-      try {
-        unlistenDefChanged = await listen('definition:changed', () => {
-          setSyncToken((v) => v + 1);
-        });
-      } catch (e) {
-        console.warn('[TsDashboard] Failed to listen for definition:changed:', e);
-      }
-
-      try {
-        unlistenSettings = await listen<string>('settings:changed', (event) => {
-          if (event.payload === 'auto_sync_gauge_ranges') {
-            invoke<any>('get_settings')
-              .then((settings) => {
-                if (settings.auto_sync_gauge_ranges !== undefined) {
-                  setAutoSyncGaugeRanges(!!settings.auto_sync_gauge_ranges);
-                }
-              })
-              .catch((e) => console.warn('[TsDashboard] get_settings failed:', e));
-          }
-        });
-      } catch (e) {
-        console.warn('[TsDashboard] Failed to listen for settings:changed:', e);
-      }
-    })();
-
-    return () => {
-      if (unlistenIni) unlistenIni();
-      if (unlistenDefLoaded) unlistenDefLoaded();
-      if (unlistenDefChanged) unlistenDefChanged();
-      if (unlistenSettings) unlistenSettings();
-    };
-  }, []);
+  // Sync gauge ranges from INI GaugeConfigurations (manual trigger).
+  const { syncGaugeRanges: handleSyncGaugeRanges } =
+    useGaugeRangeSync(dashFile, setDashFile);
 
   // Exit designer mode
   const handleExitDesigner = useCallback(() => {
@@ -351,132 +198,53 @@ export default function TsDashboard({ initialDashPath, isConnected = false }: Ts
     setSelectedGaugeId(null);
   }, []);
 
-  // Load/refresh available dashboards list
-  // Load/refresh available dashboards list. The Rust backend seeds the
-  // app data dir with default dashboards (Basic/Tuning/Racing) on first run,
-  // so list_available_dashes should always return at least these. If it does
-  // come back empty (e.g. seeding failed), we surface an empty list and let
-  // the empty-state UI / Reset to Defaults action recover.
-  const refreshDashboardList = useCallback(async () => {
-    try {
-      const dashes = await invoke<DashFileInfo[]>('list_available_dashes');
-      setAvailableDashes(dashes ?? []);
-      return dashes ?? [];
-    } catch (e) {
-      console.warn('[TsDashboard] list_available_dashes failed:', e);
-      setAvailableDashes([]);
-      return [];
-    }
-  }, []);
+  const handleReloadDefaultGauges = useCallback(
+    () => reloadCurrentDashboard(),
+    [reloadCurrentDashboard],
+  );
 
-  // Handle import completion - refresh list and optionally select first imported
+  const handleSaveDashboard = useCallback(
+    () => saveDashboard(),
+    [saveDashboard],
+  );
+
+  // Handle import completion - close dialog after CRUD has refreshed/selected
   const handleImportComplete = useCallback(async (imported: DashFileInfo[]) => {
-    await refreshDashboardList();
-    
-    // Select the first imported dashboard if any were imported
-    if (imported.length > 0) {
-      setSelectedPath(imported[0].path);
-    }
-    
+    await onImportComplete(imported);
     setShowImportDialog(false);
-  }, [refreshDashboardList]);
+  }, [onImportComplete]);
 
   // Create new dashboard from template
   const handleNewDashboard = useCallback(async () => {
     if (!newDashName.trim()) return;
-    
-    try {
-      // Create a new dashboard with basic template
-      const newPath = await invoke<string>('create_new_dashboard', { 
-        name: newDashName.trim(),
-        template: 'basic' 
-      });
-      await refreshDashboardList();
-      setSelectedPath(newPath);
-      setShowNewDialog(false);
-      setNewDashName('');
-    } catch (e) {
-      console.error('Failed to create dashboard:', e);
-    }
-  }, [newDashName, refreshDashboardList]);
+    await createDashboard(newDashName);
+    setShowNewDialog(false);
+    setNewDashName('');
+  }, [newDashName, createDashboard]);
 
   // Rename current dashboard
   const handleRenameDashboard = useCallback(async () => {
     if (!renameName.trim() || !selectedPath) return;
-    
-    try {
-      const newPath = await invoke<string>('rename_dashboard', { 
-        path: selectedPath, 
-        newName: renameName.trim() 
-      });
-      await refreshDashboardList();
-      setSelectedPath(newPath);
-      setShowRenameDialog(false);
-      setRenameName('');
-    } catch (e) {
-      console.error('Failed to rename dashboard:', e);
-    }
-  }, [renameName, selectedPath, refreshDashboardList]);
+    await renameDashboard(renameName);
+    setShowRenameDialog(false);
+    setRenameName('');
+  }, [renameName, selectedPath, renameDashboard]);
 
   // Delete current dashboard
   const handleDeleteDashboard = useCallback(async () => {
-    if (!selectedPath) return;
-    
-    try {
-      await invoke('delete_dashboard', { path: selectedPath });
-      const dashes = await refreshDashboardList();
-      // Select next available dashboard
-      if (dashes.length > 0) {
-        setSelectedPath(dashes[0].path);
-      } else {
-        setSelectedPath('');
-        setDashFile(null);
-      }
-      setShowDeleteConfirm(false);
-    } catch (e) {
-      console.error('Failed to delete dashboard:', e);
-    }
-  }, [selectedPath, refreshDashboardList]);
+    await deleteDashboard();
+    setShowDeleteConfirm(false);
+  }, [deleteDashboard]);
 
-  // Duplicate current dashboard
-  const handleDuplicateDashboard = useCallback(async () => {
-    if (!dashFile || !selectedPath) return;
-    
-    try {
-      // Generate a name for the copy
-      const currentName = selectedPath.split('/').pop()?.replace(/\.(ltdash\.xml|dash)$/i, '') || 'Dashboard';
-      const copyName = `${currentName} (Copy)`;
-      
-      const newPath = await invoke<string>('duplicate_dashboard', { 
-        path: selectedPath,
-        newName: copyName
-      });
-      await refreshDashboardList();
-      setSelectedPath(newPath);
-    } catch (e) {
-      console.error('Failed to duplicate dashboard:', e);
-    }
-  }, [dashFile, selectedPath, refreshDashboardList]);
+  const handleDuplicateDashboard = useCallback(
+    () => duplicateDashboard(),
+    [duplicateDashboard],
+  );
 
-  // Export dashboard to file
-  const handleExportDashboard = useCallback(async () => {
-    if (!dashFile) return;
-    
-    try {
-      const currentName = selectedPath.split('/').pop()?.replace(/\.(ltdash\.xml|dash)$/i, '') || 'Dashboard';
-      const filePath = await save({
-        title: 'Export Dashboard',
-        filters: [{ name: 'Dashboard Files', extensions: ['ltdash.xml', 'dash', 'gauge'] }],
-        defaultPath: `${currentName}.ltdash.xml`,
-      });
-      
-      if (filePath) {
-        await invoke('export_dashboard', { dashFile, path: filePath });
-      }
-    } catch (e) {
-      console.error('Failed to export dashboard:', e);
-    }
-  }, [dashFile, selectedPath]);
+  const handleExportDashboard = useCallback(
+    () => exportDashboard(),
+    [exportDashboard],
+  );
 
   // Recompute scale when validation panel visibility changes
   useEffect(() => {
