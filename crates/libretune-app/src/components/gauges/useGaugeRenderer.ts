@@ -40,6 +40,7 @@ export type GaugePaintFn = (
   cssW: number,
   cssH: number,
   displayValue: number,
+  peakValue: number,
 ) => void;
 
 export interface UseGaugeRendererOptions {
@@ -65,6 +66,13 @@ export interface UseGaugeRendererResult {
    * away once every painter is a top-level pure function.
    */
   displayValueRef: React.MutableRefObject<number>;
+  /**
+   * Persistent peak (maximum) of the display value since this gauge
+   * mounted. Painters consult this when `config.peak_hold === true` to
+   * draw a TS-style peak marker. Resets when the gauge is reseated
+   * (component remount).
+   */
+  peakValueRef: React.MutableRefObject<number>;
 }
 
 export function useGaugeRenderer(opts: UseGaugeRendererOptions): UseGaugeRendererResult {
@@ -79,6 +87,9 @@ export function useGaugeRenderer(opts: UseGaugeRendererOptions): UseGaugeRendere
 
   // displayValueRef holds the CURRENTLY DISPLAYED (smoothly animated) value.
   const displayValueRef = useRef(initialClamped);
+  // peakValueRef holds the maximum value ever observed by the gauge —
+  // used for the optional `peak_hold` marker.
+  const peakValueRef = useRef(initialClamped);
   // targetRef holds the ANIMATION TARGET — updated by store reads or the
   // sweep/demo prop-sync effect below.
   const targetRef = useRef(initialClamped);
@@ -216,7 +227,7 @@ export function useGaugeRenderer(opts: UseGaugeRendererOptions): UseGaugeRendere
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
       }
-      paintRef.current(ctx, cssW, cssH, displayValueRef.current);
+      paintRef.current(ctx, cssW, cssH, displayValueRef.current, peakValueRef.current);
     };
 
     let loopActive = true;
@@ -235,6 +246,9 @@ export function useGaugeRenderer(opts: UseGaugeRendererOptions): UseGaugeRendere
       }
 
       const target = targetRef.current;
+      if (target > peakValueRef.current) {
+        peakValueRef.current = target;
+      }
       const diff = target - displayValueRef.current;
       if (Math.abs(diff) > epsilon) {
         displayValueRef.current = displayValueRef.current + diff * ANIMATION_LERP;
@@ -302,5 +316,5 @@ export function useGaugeRenderer(opts: UseGaugeRendererOptions): UseGaugeRendere
     config.antialiasing_on,
   ]);
 
-  return { canvasRef, displayValueRef };
+  return { canvasRef, displayValueRef, peakValueRef };
 }

@@ -176,6 +176,47 @@ export default function PropertyEditor({ component, onChange }: Props) {
             </div>
           </div>
         </div>
+
+        <div className="property-section">
+          <h4>Conditions & Behavior</h4>
+          <div className="property-group">
+            <label title="INI-style boolean expression. Gauge is hidden when false. Empty = always shown.">
+              Enabled Condition
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. hasLambdaSensor"
+              value={gauge.enabled_condition ?? ''}
+              onChange={(e) =>
+                updateGauge({ enabled_condition: e.target.value.trim() ? e.target.value : null })
+              }
+            />
+          </div>
+          <div className="property-group">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={gauge.peak_hold ?? false}
+                onChange={(e) => updateGauge({ peak_hold: e.target.checked })}
+              />
+              Peak Hold (show all-time max marker)
+            </label>
+          </div>
+          <div className="property-group">
+            <label title="Channel-units deadband on warning/critical state transitions.">
+              Hysteresis
+            </label>
+            <input
+              type="number"
+              step={0.1}
+              value={gauge.hysteresis ?? ''}
+              placeholder="0"
+              onChange={(e) =>
+                updateGauge({ hysteresis: e.target.value === '' ? null : parseFloat(e.target.value) })
+              }
+            />
+          </div>
+        </div>
       </div>
     );
   }
@@ -224,7 +265,22 @@ export default function PropertyEditor({ component, onChange }: Props) {
           >
             <option value="BasicRectangleIndicator">Rectangle</option>
             <option value="BulbIndicator">Bulb</option>
+            <option value="Led">LED</option>
           </select>
+        </div>
+
+        <div className="property-group">
+          <label title="INI-style boolean expression. Indicator is hidden when false.">
+            Enabled Condition
+          </label>
+          <input
+            type="text"
+            placeholder="e.g. hasIacStepper"
+            value={indicator.enabled_condition ?? ''}
+            onChange={(e) =>
+              updateIndicator({ enabled_condition: e.target.value.trim() ? e.target.value : null })
+            }
+          />
         </div>
 
         <div className="property-section">

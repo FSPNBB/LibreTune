@@ -122,21 +122,31 @@ function TsGaugeInner({ config, value, embeddedImages, legacyMode = false, overr
     return `${italic}${bold}${adjustedSize}px ${getFontFamily(monospace)}`;
   }, [config.font_size_adjustment, config.italic_font, getFontFamily]);
 
-  /** Get color based on value thresholds */
+  /** Get color based on value thresholds. Honours `config.hysteresis` (Plan D-5):
+   * once the gauge has entered a warning/critical zone, it stays there until
+   * the displayed value backs off the threshold by at least `hysteresis` units.
+   * Prevents flicker when a channel hovers right at a threshold.
+   */
+  const lastZoneRef = React.useRef<'normal' | 'warn' | 'critical'>('normal');
   const getValueColor = useCallback((): TsColor => {
-    // Use != null to catch both null and undefined
-    if (config.high_critical != null && displayValueRef.current >= config.high_critical) {
-      return config.critical_color;
-    }
-    if (config.low_critical != null && displayValueRef.current <= config.low_critical) {
-      return config.critical_color;
-    }
-    if (config.high_warning != null && displayValueRef.current >= config.high_warning) {
-      return config.warn_color;
-    }
-    if (config.low_warning != null && displayValueRef.current <= config.low_warning) {
-      return config.warn_color;
-    }
+    const v = displayValueRef.current;
+    const h = config.hysteresis ?? 0;
+    const prev = lastZoneRef.current;
+    // Compute base zone with widened bounds when leaving a hot zone.
+    const inCritical = (
+      (config.high_critical != null && v >= config.high_critical - (prev === 'critical' ? h : 0)) ||
+      (config.low_critical != null && v <= config.low_critical + (prev === 'critical' ? h : 0))
+    );
+    const inWarn = !inCritical && (
+      (config.high_warning != null && v >= config.high_warning - (prev === 'warn' || prev === 'critical' ? h : 0)) ||
+      (config.low_warning != null && v <= config.low_warning + (prev === 'warn' || prev === 'critical' ? h : 0))
+    );
+    let zone: 'normal' | 'warn' | 'critical' = 'normal';
+    if (inCritical) zone = 'critical';
+    else if (inWarn) zone = 'warn';
+    lastZoneRef.current = zone;
+    if (zone === 'critical') return config.critical_color;
+    if (zone === 'warn') return config.warn_color;
     return config.font_color;
   }, [config]);
 
@@ -151,7 +161,7 @@ function TsGaugeInner({ config, value, embeddedImages, legacyMode = false, overr
    * renders does not restart the rAF loop.
    */
   const paint = useCallback(
-    (ctx: CanvasRenderingContext2D, cssW: number, cssH: number, displayValue: number) => {
+    (ctx: CanvasRenderingContext2D, cssW: number, cssH: number, displayValue: number, peakValue: number) => {
       const needleImage = getEmbeddedImage(config.needle_image_file_name);
       const bgImage = getEmbeddedImage(config.background_image_file_name);
 
@@ -163,6 +173,7 @@ function TsGaugeInner({ config, value, embeddedImages, legacyMode = false, overr
           width: cssW,
           height: cssH,
           value: displayValue,
+          peakValue,
           config,
           legacyMode,
           bgImage,
@@ -182,6 +193,7 @@ function TsGaugeInner({ config, value, embeddedImages, legacyMode = false, overr
         width: cssW,
         height: cssH,
         value: displayValue,
+        peakValue,
         config,
         legacyMode,
         bgImage,

@@ -24,6 +24,13 @@ export interface PainterContext {
   height: number;
   /** Smoothly-animated display value (lerp'd toward target). */
   value: number;
+  /**
+   * Persistent peak (maximum) the gauge has observed since mount,
+   * threaded through by `useGaugeRenderer`. Painters are free to ignore
+   * it; analog/sweep painters render a small marker at this position
+   * when `config.peak_hold === true` (Plan D-5).
+   */
+  peakValue: number;
   config: TsGaugeConfig;
   /** True while displaying a TunerStudio dashboard in legacy bitmap mode. */
   legacyMode: boolean;

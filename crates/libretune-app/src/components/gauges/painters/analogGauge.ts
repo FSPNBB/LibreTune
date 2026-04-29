@@ -5,7 +5,7 @@ import { roundRect, lightenColor, darkenColor, createMetallicGradient } from '..
 import type { Painter } from './types';
 
 export const analogGaugePainter: Painter = (pctx) => {
-  const { ctx, width, height, value, config, bgImage, needleImage, getValueColor: _gv, getFontSpec } = pctx;
+  const { ctx, width, height, value, peakValue, config, bgImage, needleImage, getValueColor: _gv, getFontSpec } = pctx;
   void _gv; // unused — analog gauge uses face color from config
 
   // Enforce perfect circle: use the smaller of width/height, center in canvas
@@ -247,6 +247,37 @@ export const analogGaugePainter: Painter = (pctx) => {
   ctx.stroke();
 
   ctx.restore();
+
+  // Optional peak-hold marker (Plan D-5).
+  // Renders as a small wedge on the dial face at the gauge's all-time-high
+  // position. Uses the warning color if the peak crossed a warn/critical
+  // threshold, else the trim color.
+  if (config.peak_hold && peakValue > config.min) {
+    const peakClamped = Math.max(config.min, Math.min(config.max, peakValue));
+    const peakPct = (peakClamped - config.min) / (config.max - config.min);
+    const peakAngle = angleAt(peakPct);
+    const inner = faceRadius * 0.78;
+    const outer = faceRadius * 0.94;
+    const peakColor =
+      (config.high_critical != null && peakClamped >= config.high_critical) ||
+      (config.low_critical != null && peakClamped <= config.low_critical)
+        ? tsColorToHex(config.critical_color)
+        : (config.high_warning != null && peakClamped >= config.high_warning) ||
+          (config.low_warning != null && peakClamped <= config.low_warning)
+          ? tsColorToHex(config.warn_color)
+          : tsColorToHex(config.trim_color);
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.rotate(peakAngle);
+    ctx.beginPath();
+    ctx.moveTo(inner, 0);
+    ctx.lineTo(outer, -outer * 0.04);
+    ctx.lineTo(outer, outer * 0.04);
+    ctx.closePath();
+    ctx.fillStyle = peakColor;
+    ctx.fill();
+    ctx.restore();
+  }
 
   // Title with shadow (move up to avoid overlap)
   ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';

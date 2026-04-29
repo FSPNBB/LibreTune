@@ -126,8 +126,8 @@ export function useDesignerDrop({
       const data = e.dataTransfer.getData('application/json');
       if (!data) return;
 
-      const channel = JSON.parse(data);
-      if (channel.type !== 'channel' || !dashFile) return;
+      const payload = JSON.parse(data);
+      if (!dashFile) return;
 
       const rect = e.currentTarget.getBoundingClientRect();
       let relX = (e.clientX - rect.left) / rect.width;
@@ -142,25 +142,40 @@ export function useDesignerDrop({
         relY = snapToGrid(relY);
       }
 
-      const info = channelInfoMap[channel.id];
-      const defaultGauge = createDefaultGaugeFromChannel(
-        channel.id,
-        channel.label,
-        info,
-        relX,
-        relY,
-      );
+      let gauge: TsGaugeConfig;
+      let actionLabel: string;
+
+      if (payload.type === 'painter') {
+        // Plan v2 / D-7c: dropping a painter palette tile creates a new
+        // placeholder gauge of that type bound to no channel yet.
+        gauge = createDefaultGaugeFromChannel('', payload.label || payload.painter, undefined, relX, relY);
+        gauge.gauge_painter = payload.painter;
+        gauge.title = payload.label || payload.painter;
+        actionLabel = `Add ${payload.painter}`;
+      } else if (payload.type === 'channel') {
+        const info = channelInfoMap[payload.id];
+        gauge = createDefaultGaugeFromChannel(
+          payload.id,
+          payload.label,
+          info,
+          relX,
+          relY,
+        );
+        actionLabel = `Add gauge from ${payload.label}`;
+      } else {
+        return;
+      }
 
       const updatedComponents = [
         ...dashFile.gauge_cluster.components,
-        { Gauge: defaultGauge },
+        { Gauge: gauge },
       ];
       const updatedFile: DashFile = {
         ...dashFile,
         gauge_cluster: { ...dashFile.gauge_cluster, components: updatedComponents },
       };
 
-      pushHistory(updatedFile, `Add gauge from ${channel.label}`);
+      pushHistory(updatedFile, actionLabel);
       onDashFileChange(updatedFile);
     } catch (err) {
       console.error('Drop handler error:', err);

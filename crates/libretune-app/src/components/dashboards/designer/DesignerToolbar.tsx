@@ -1,4 +1,8 @@
-import { Undo2, Redo2, Copy, Clipboard, Trash2, Grid3X3, Save, X } from 'lucide-react';
+import {
+  Undo2, Redo2, Copy, Clipboard, Trash2, Grid3X3, Save, X,
+  AlignStartHorizontal, AlignCenterHorizontal, AlignEndHorizontal,
+  AlignStartVertical, AlignCenterVertical, AlignEndVertical,
+} from 'lucide-react';
 
 interface DesignerToolbarProps {
   canUndo: boolean;
@@ -16,6 +20,8 @@ interface DesignerToolbarProps {
   onGridSnapChange: (v: number) => void;
   onSave: () => void;
   onExit: () => void;
+  /** Plan v2 / D-7a — align selection to canvas. Disabled when no selection. */
+  onAlign?: (edge: 'left' | 'hcenter' | 'right' | 'top' | 'vcenter' | 'bottom') => void;
 }
 
 export default function DesignerToolbar({
@@ -34,6 +40,7 @@ export default function DesignerToolbar({
   onGridSnapChange,
   onSave,
   onExit,
+  onAlign,
 }: DesignerToolbarProps) {
   return (
     <div className="designer-toolbar">
@@ -85,6 +92,32 @@ export default function DesignerToolbar({
       </div>
 
       <div className="toolbar-separator" />
+
+      {onAlign && (
+        <>
+          <div className="toolbar-group" title="Align selection to canvas">
+            <button className="toolbar-btn" disabled={!hasSelection} onClick={() => onAlign('left')} title="Align Left">
+              <AlignStartVertical size={16} />
+            </button>
+            <button className="toolbar-btn" disabled={!hasSelection} onClick={() => onAlign('hcenter')} title="Center Horizontally">
+              <AlignCenterVertical size={16} />
+            </button>
+            <button className="toolbar-btn" disabled={!hasSelection} onClick={() => onAlign('right')} title="Align Right">
+              <AlignEndVertical size={16} />
+            </button>
+            <button className="toolbar-btn" disabled={!hasSelection} onClick={() => onAlign('top')} title="Align Top">
+              <AlignStartHorizontal size={16} />
+            </button>
+            <button className="toolbar-btn" disabled={!hasSelection} onClick={() => onAlign('vcenter')} title="Center Vertically">
+              <AlignCenterHorizontal size={16} />
+            </button>
+            <button className="toolbar-btn" disabled={!hasSelection} onClick={() => onAlign('bottom')} title="Align Bottom">
+              <AlignEndHorizontal size={16} />
+            </button>
+          </div>
+          <div className="toolbar-separator" />
+        </>
+      )}
 
       <div className="toolbar-group">
         <button className="toolbar-btn primary" onClick={onSave} title="Save Dashboard (Ctrl+S)">
