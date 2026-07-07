@@ -32,6 +32,12 @@ import { useIniDefaultsLoader } from "./hooks/useIniDefaultsLoader";
 import { useTableCurveRefresh } from "./hooks/useTableCurveRefresh";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { useEcuEventListeners } from "./hooks/useEcuEventListeners";
+import { useAutoConnect, type ConnectOptions } from "./hooks/useAutoConnect";
+import { useReconnectHandler } from "./hooks/useReconnectHandler";
+import {
+  resolvePreferredPort,
+  type ConnectionPhase,
+} from "./utils/connectionWorkflow";
 import { PinConfig } from "./components/hardware/PortEditor";
 import { useLoading } from "./contexts/LoadingContext";
 import { useToast } from "./contexts/ToastContext";
@@ -84,6 +90,7 @@ function AppContent() {
   const [ecuType, setEcuType] = useState<string>("Unknown");
   const [ports, setPorts] = useState<string[]>([]);
   const [selectedPort, setSelectedPort] = useState("");
+  const [lastSerialPort, setLastSerialPort] = useState<string | null>(null);
   const [baudRate, setBaudRate] = useState(115200);
   const [timeoutMs, setTimeoutMs] = useState(2000);
   const [connectionType, setConnectionType] = useState<'Serial' | 'Tcp'>("Serial");
@@ -162,6 +169,7 @@ function AppContent() {
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [loadDialogOpen, setLoadDialogOpen] = useState(false);
   const [burnDialogOpen, setBurnDialogOpen] = useState(false);
+  const [firmwareUpdateDialogOpen, setFirmwareUpdateDialogOpen] = useState(false);
   const [newTuneDialogOpen, setNewTuneDialogOpen] = useState(false);
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const [mathChannelsDialogOpen, setMathChannelsDialogOpen] = useState(false);
@@ -284,6 +292,7 @@ function AppContent() {
         if (settings.units_system) setUnitsSystem(settings.units_system as 'metric' | 'imperial');
         if (settings.auto_burn_on_close !== undefined) setAutoBurnOnClose(settings.auto_burn_on_close);
         if (settings.status_bar_channels) setStatusBarChannels(settings.status_bar_channels);
+        if (settings.last_serial_port) setLastSerialPort(settings.last_serial_port);
         // Honor saved UI language preference (mirror to localStorage so the
         // i18n LanguageDetector picks it up on next app start, and switch live now).
         if (settings.language && typeof settings.language === 'string') {
@@ -339,6 +348,20 @@ function AppContent() {
       
       if (project) {
         setCurrentProject(project);
+        if (project.connection.baud_rate) {
+          setBaudRate(project.connection.baud_rate);
+        }
+        const initialPorts = await invoke<string[]>("get_serial_ports");
+        setPorts(initialPorts);
+        const preferred = resolvePreferredPort({
+          projectPort: project.connection.port,
+          lastSerialPort: settings.last_serial_port ?? null,
+          availablePorts: initialPorts,
+          currentSelected: project.connection.port ?? undefined,
+        });
+        if (preferred) {
+          setSelectedPort(preferred);
+        }
         try {
           // Fetch menus for the project
           const values = await fetchConstants();
@@ -461,10 +484,15 @@ function AppContent() {
         }
       }
       
-      // Refresh serial ports
+      // Refresh serial ports — prefer the project's last successful port
       const p = await invoke<string[]>("get_serial_ports");
       setPorts(p);
-      if (p.length > 0 && !selectedPort) setSelectedPort(p[0]);
+      const rememberedPort = project?.connection.port;
+      if (rememberedPort && p.includes(rememberedPort)) {
+        setSelectedPort(rememberedPort);
+      } else if (p.length > 0 && !rememberedPort && !selectedPort) {
+        setSelectedPort(p[0]);
+      }
     } catch (e) {
       console.error("Failed to initialize app:", e);
       showToast("Failed to initialize application: " + e, "error");
@@ -551,22 +579,35 @@ function AppContent() {
   // reconnect:request, ini:changed, demo:changed (extracted to hook).
   useEcuEventListeners({
     isTauri,
-    connecting,
-    selectedPort,
-    baudRate,
-    timeoutMs,
-    connectionRuntimePacketMode,
-    defaultRuntimePacketMode,
     status,
     currentProject,
     activeTabId,
-    connect,
     doSync,
     checkStatus,
     fetchConstants,
     fetchMenuTree,
     showLoading,
     hideLoading,
+  });
+
+  const autoConnectPhase = useAutoConnect({
+    currentProject,
+    lastSerialPort,
+    status,
+    connecting,
+    syncing,
+    connect,
+    refreshPorts,
+  });
+
+  useReconnectHandler({
+    connecting,
+    syncing,
+    status,
+    projectPort: currentProject?.connection.port ?? null,
+    lastSerialPort,
+    connect,
+    refreshPorts,
     showToast,
   });
 
@@ -696,26 +737,41 @@ function AppContent() {
     }
   }
 
-  async function connect() {
+  async function connect(options?: ConnectOptions) {
+    const targetPort = options?.port ?? selectedPort;
     setConnecting(true);
     setSyncProgress(null);
     setSyncStatus(null);
     try {
-      // Sanity-check selected port is still available; refresh list if necessary
-      if (!ports.includes(selectedPort)) {
-        await refreshPorts();
+      if (options?.port && options.port !== selectedPort) {
+        setSelectedPort(options.port);
       }
 
-      // If still not present, pick first available and notify user
-      if (!ports.includes(selectedPort)) {
-        if (ports.length > 0) {
-          const old = selectedPort;
-          setSelectedPort(ports[0]);
-          showToast(`Selected port '${old}' is not available; using '${ports[0]}' instead.`, "warning");
+      // Sanity-check selected port is still available; refresh list if necessary
+      let availablePorts = ports;
+      if (!availablePorts.includes(targetPort)) {
+        availablePorts = await refreshPorts();
+      }
+
+      if (!availablePorts.includes(targetPort)) {
+        if (options?.strictPort) {
+          return;
+        }
+        if (availablePorts.length > 0) {
+          const fallback = availablePorts[0];
+          setSelectedPort(fallback);
+          showToast(
+            `Selected port '${targetPort}' is not available; using '${fallback}' instead.`,
+            "warning",
+          );
         } else {
           throw new Error('No serial ports available');
         }
       }
+
+      const portToUse = availablePorts.includes(targetPort)
+        ? targetPort
+        : availablePorts[0];
 
       // Connect and get mismatch info directly (no async race)
       let runtimeMode = connectionRuntimePacketMode || defaultRuntimePacketMode;
@@ -734,7 +790,7 @@ function AppContent() {
       }
 
       const result = await invoke<ConnectResult>("connect_to_ecu", { 
-        portName: selectedPort, 
+        portName: portToUse, 
         baudRate, 
         timeoutMs, 
         runtimePacketMode: runtimeMode,
@@ -768,25 +824,50 @@ function AppContent() {
       if (newStatus.state === "Connected" && newStatus.has_definition) {
         await doSync();
         
-        // Save the successful connection port to project config
+        // Save the successful connection port to project config and app memory
         if (currentProject) {
           try {
             await invoke("update_project_connection", {
-              port: selectedPort,
+              port: portToUse,
               baudRate: baudRate,
+            });
+            setCurrentProject({
+              ...currentProject,
+              connection: {
+                ...currentProject.connection,
+                port: portToUse,
+                baud_rate: baudRate,
+              },
             });
             console.log("Saved connection settings to project");
           } catch (saveError) {
             console.error("Failed to save connection settings:", saveError);
-            // Don't show error to user as connection was successful
           }
+        }
+
+        try {
+          await invoke("update_setting", {
+            key: "last_serial_port",
+            value: portToUse,
+          });
+          setLastSerialPort(portToUse);
+        } catch (saveError) {
+          console.error("Failed to save last serial port:", saveError);
+        }
+
+        if (options?.silent) {
+          showToast(`Auto-connected to ECU on ${portToUse}`, "success");
         }
       }
     } catch (e) {
       // IMPORTANT: Always check status after connection attempt, even on error
       // This ensures the UI shows the correct disconnected state
       await checkStatus();
-      showToast("Connection failed: " + e, "error");
+      if (!options?.silent) {
+        showToast("Connection failed: " + e, "error");
+      } else {
+        console.debug("Auto-connect attempt failed:", e);
+      }
     } finally {
       setConnecting(false);
       setSyncing(false);
@@ -794,32 +875,38 @@ function AppContent() {
   }
 
   async function disconnect() {
+    setConnecting(false);
+    setSyncing(false);
     try {
       await invoke("stop_realtime_stream").catch(() => {});
       await invoke("disconnect_ecu");
+      useRealtimeStore.getState().clearChannels();
       await checkStatus();
     } catch (e) {
       console.error(e);
     }
   }
 
-  async function refreshPorts() {
+  async function refreshPorts(): Promise<string[]> {
     try {
       const p = await invoke<string[]>("get_serial_ports");
       setPorts(p);
 
       if (p.length > 0) {
-        // Prefer explicit ttyACM0 if present, otherwise pick first available
-        const acm0 = p.find((x) => x.endsWith("ttyACM0"));
-        const preferred = acm0 || p[0];
-
-        // If user hasn't chosen a port yet, or current selection is missing, use preferred
-        if (!selectedPort || !p.includes(selectedPort)) {
+        const preferred = resolvePreferredPort({
+          projectPort: currentProject?.connection.port ?? null,
+          lastSerialPort,
+          availablePorts: p,
+          currentSelected: selectedPort,
+        });
+        if (preferred) {
           setSelectedPort(preferred);
         }
       }
+      return p;
     } catch (e) {
       console.error("Failed to refresh ports:", e);
+      return [];
     }
   }
 
@@ -928,12 +1015,19 @@ function AppContent() {
     try {
       const project = await invoke<CurrentProject>("open_project", { path });
       setCurrentProject(project);
-      
-      // Update port selection from project settings
-      if (project.connection.port) {
-        setSelectedPort(project.connection.port);
-      }
       setBaudRate(project.connection.baud_rate || 115200);
+
+      const portList = await invoke<string[]>("get_serial_ports");
+      setPorts(portList);
+      const preferred = resolvePreferredPort({
+        projectPort: project.connection.port,
+        lastSerialPort,
+        availablePorts: portList,
+        currentSelected: project.connection.port ?? undefined,
+      });
+      if (preferred) {
+        setSelectedPort(preferred);
+      }
       
       try {
         // Refresh menus for the project
@@ -944,21 +1038,6 @@ function AppContent() {
       } catch (menuError) {
         console.error("Failed to load menus:", menuError);
         showToast("Project opened but menu loading failed. Some features may be unavailable.", "warning");
-      }
-      
-      // Auto-connect if enabled and port is set
-      if (project.connection.auto_connect && project.connection.port) {
-        hideLoading(); // Hide the project loading first
-        showToast("Auto-connecting to ECU...", "info");
-        // Small delay to let the UI update
-        setTimeout(async () => {
-          try {
-            await connect();
-          } catch (e) {
-            console.error("Auto-connect failed:", e);
-            // Don't show error toast as connect() already does that
-          }
-        }, 500);
       }
     } catch (e) {
       const { message, details } = formatError(e);
@@ -1161,7 +1240,7 @@ function AppContent() {
     sidebarVisible, tabs, openTarget, handleStdTarget, openHelpTopic, showToast,
     closeProject, handleCreateRestorePoint,
     setNewProjectDialogOpen, setImportProjectOpen, setSaveDialogOpen, setLoadDialogOpen,
-    setBurnDialogOpen, setRestorePointsOpen, setTuneHistoryOpen, setSettingsDialogOpen,
+    setBurnDialogOpen, setFirmwareUpdateDialogOpen, setRestorePointsOpen, setTuneHistoryOpen, setSettingsDialogOpen,
     setMathChannelsDialogOpen, setBaseMapDialogOpen, setTableComparisonOpen,
     setTuneFileDiffOpen, setDynoOverlayOpen, setPluginPanelOpen, setConnectionDialogOpen,
     setUserManualOpen, setUserManualSection, setAboutDialogOpen, setSidebarVisible,
@@ -1253,6 +1332,37 @@ function AppContent() {
     return items;
   }, [status.state, statusBarChannels, isLogging, logDuration, syncStatus]);
 
+  const connectionPhase: ConnectionPhase = useMemo(() => {
+    if (signatureMismatchOpen && status.state === "Connected") {
+      return "signature-mismatch";
+    }
+    if (connecting) {
+      return "connecting";
+    }
+    if (syncing) {
+      return "syncing";
+    }
+    if (autoConnectPhase) {
+      return autoConnectPhase;
+    }
+    if (status.state === "Connected") {
+      return "connected";
+    }
+    return "disconnected";
+  }, [
+    signatureMismatchOpen,
+    status.state,
+    connecting,
+    syncing,
+    autoConnectPhase,
+  ]);
+
+  const connectionPort =
+    selectedPort ||
+    currentProject?.connection.port ||
+    lastSerialPort ||
+    undefined;
+
 
   return (
     <>
@@ -1273,6 +1383,9 @@ function AppContent() {
         statusItems={statusItems}
         connected={status.state === "Connected"}
         ecuName={(status.state === "Connected" ? status.signature : (status.ini_name ? status.ini_name : undefined)) as string | undefined}
+        connectionPhase={connectionPhase}
+        connectionPort={connectionPort}
+        onConnectionClick={() => setConnectionDialogOpen(true)}
         projectName={currentProject?.name}
         unitsSystem={unitsSystem}
         realtimeChannels={statusBarChannels}
@@ -1284,6 +1397,7 @@ function AppContent() {
             availableProjects={availableProjects}
             status={status}
             ecuType={ecuType}
+            iniCapabilities={iniCapabilities}
             activeTabId={activeTabId}
             tabs={tabs}
             tabContents={tabContents}
@@ -1320,6 +1434,9 @@ function AppContent() {
         setLoadDialogOpen={setLoadDialogOpen}
         burnDialogOpen={burnDialogOpen}
         setBurnDialogOpen={setBurnDialogOpen}
+        firmwareUpdateDialogOpen={firmwareUpdateDialogOpen}
+        setFirmwareUpdateDialogOpen={setFirmwareUpdateDialogOpen}
+        iniCapabilities={iniCapabilities}
         newTuneDialogOpen={newTuneDialogOpen}
         setNewTuneDialogOpen={setNewTuneDialogOpen}
         settingsDialogOpen={settingsDialogOpen}
@@ -1354,6 +1471,8 @@ function AppContent() {
         connecting={connecting}
         syncing={syncing}
         syncProgress={syncProgress}
+        lastSerialPort={lastSerialPort}
+        connectionPhase={connectionPhase}
         iniDefaults={iniDefaults}
         applyIniDefaults={applyIniDefaults}
         connectionRuntimePacketMode={connectionRuntimePacketMode}

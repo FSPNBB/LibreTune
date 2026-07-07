@@ -107,6 +107,32 @@ export default function DialogField({
   // This matches the closed-source program's behavior: "all 12 channels should be visible but disabled"
 
   const displayLabel = label || constant.label || constant.name;
+
+  const fieldRowClass = (extra?: string) =>
+    ['settings-field', 'dialog-field', !isEnabled ? 'is-disabled' : '', extra]
+      .filter(Boolean)
+      .join(' ');
+
+  const renderLabel = () => (
+    <label className="field-label">
+      <span className="field-label-text">{displayLabel}</span>
+      {(showAllHelpIcons || constant.help) && (
+        <span
+          className="help-icon"
+          title={constant.help || 'Click for info'}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleFocus();
+          }}
+          tabIndex={0}
+          onKeyDown={(e) => e.key === 'Enter' && handleFocus()}
+        >
+          <HelpCircle size={16} />
+        </span>
+      )}
+    </label>
+  );
   
   // Handle field focus to show help in description panel
   const handleFocus = () => {
@@ -172,15 +198,8 @@ export default function DialogField({
   // String field
   if (constant.value_type === 'string') {
     return (
-      <div className="settings-field">
-        <label>
-          {displayLabel}
-          {(showAllHelpIcons || constant.help) && (
-            <span className="help-icon" title={constant.help || 'Click for info'} onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleFocus(); }} tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && handleFocus()}>
-              <HelpCircle size={16} />
-            </span>
-          )}
-        </label>
+      <div className={fieldRowClass()}>
+        {renderLabel()}
         <div className="field-input-wrap">
           <input
             type="text"
@@ -203,13 +222,15 @@ export default function DialogField({
     );
   }
 
-  // Bits field (dropdown or checkbox)
+  // Bits field — always a dropdown (enum-style INI bits constants)
   if (constant.value_type === 'bits') {
     // If no bit_options at all in INI, show read-only display
     if (bitOptions.length === 0) {
       return (
-        <div className="settings-field">
-          <label>{displayLabel}</label>
+        <div className={fieldRowClass()}>
+          <label className="field-label">
+            <span className="field-label-text">{displayLabel}</span>
+          </label>
           <div className="field-input-wrap">
             <input
               type="text"
@@ -241,53 +262,8 @@ export default function DialogField({
       filteredSelectedBit = selectedBit;
     }
     
-    // If only 2 valid options, render as checkbox
-    if (validBitOptions.length === 2) {
-      // Find original indices for the two valid options
-      const validIndices = bitOptions
-        .map((opt, i) => ({ opt, i }))
-        .filter(({ opt }) => opt?.trim().toUpperCase() !== 'INVALID')
-        .map(({ i }) => i);
-      
-      const checkedIndex = validIndices[1] ?? validIndices[0];
-      const uncheckedIndex = validIndices[0];
-      
-      // Get the option labels for display
-      const uncheckedLabel = bitOptions[uncheckedIndex]?.trim() || 'Off';
-      const checkedLabel = bitOptions[checkedIndex]?.trim() || 'On';
-      
-      return (
-        <div className="settings-field">
-          <label>
-            <input
-              type="checkbox"
-              checked={selectedBit === checkedIndex}
-              disabled={!isEnabled}
-              onFocus={handleFocus}
-              onChange={(e) => {
-                const newVal = e.target.checked ? checkedIndex : uncheckedIndex;
-                setSelectedBit(newVal);
-                invoke('update_constant', { name, value: newVal })
-                  .then(() => {
-                    // Optimistically update context so sibling fields re-evaluate immediately
-                    onOptimisticUpdate?.(name, newVal);
-                    onUpdate?.();
-                  })
-                  .catch((e) => alert('Update failed: ' + e));
-              }}
-            />
-            {displayLabel}: {uncheckedLabel} / {checkedLabel}
-            {(showAllHelpIcons || constant.help) && (
-              <span className="help-icon" title={constant.help || 'Click for info'} onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleFocus(); }} tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && handleFocus()}>
-                <HelpCircle size={16} />
-              </span>
-            )}
-          </label>
-        </div>
-      );
-    }
-    // Otherwise render as dropdown
-    // Ensure filteredSelectedBit is valid
+    // Always render bits fields as dropdowns (TunerStudio-style), including
+    // binary choices like "Four Stroke" / "Two Stroke" or false / true.
     const safeSelectedBit = (filteredSelectedBit !== undefined && filteredSelectedBit >= 0 && filteredSelectedBit < validBitOptions.length)
       ? filteredSelectedBit
       : (selectedBit >= 0 && selectedBit < bitOptions.length && originalToFilteredMap.has(selectedBit))
@@ -295,15 +271,8 @@ export default function DialogField({
         : 0;
     
     return (
-      <div className="settings-field">
-        <label>
-          {displayLabel}
-          {(showAllHelpIcons || constant.help) && (
-            <span className="help-icon" title={constant.help || 'Click for info'} onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleFocus(); }} tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && handleFocus()}>
-              <HelpCircle size={16} />
-            </span>
-          )}
-        </label>
+      <div className={fieldRowClass()}>
+        {renderLabel()}
         <div className="field-input-wrap">
           <select
             value={safeSelectedBit}
@@ -366,15 +335,8 @@ export default function DialogField({
 
   // Default: numeric scalar field
   return (
-    <div className="settings-field">
-      <label>
-        {displayLabel}
-        {(showAllHelpIcons || constant.help) && (
-          <span className="help-icon" title={constant.help || 'Click for info'} onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleFocus(); }} tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && handleFocus()}>
-            <HelpCircle size={16} />
-          </span>
-        )}
-      </label>
+    <div className={fieldRowClass()}>
+      {renderLabel()}
       <div className="field-input-wrap">
         <input
           type="text"

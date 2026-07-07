@@ -1,10 +1,10 @@
 /* NewProjectDialog — content/wizard styles. Outer chrome handled by Dialog. */
 
 .new-project-content {
-  min-width: 480px;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  min-width: 0;
 }
 
 .new-project-content .dialog-subtitle {
@@ -27,19 +27,30 @@
 }
 
 .ini-select-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
   gap: var(--space-2);
 }
 
 .ini-select,
 .name-input {
-  flex: 1;
-  padding: 6px 10px;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 7px 12px;
   background: var(--bg-elevated);
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
+  border-radius: 8px;
   color: var(--text-primary);
   font-size: var(--font-size-sm);
+}
+
+.ini-select {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .ini-select:focus,
@@ -49,21 +60,24 @@
 }
 
 .no-ini-placeholder {
-  flex: 1;
-  padding: 6px 10px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 7px 12px;
   background: var(--bg-elevated);
   border: 1px dashed var(--border-default);
-  border-radius: var(--radius-sm);
+  border-radius: 8px;
   color: var(--text-secondary);
   font-size: var(--font-size-sm);
   font-style: italic;
 }
 
 .browse-ini-btn {
-  padding: 6px 14px;
+  white-space: nowrap;
+  padding: 7px 16px;
   background: var(--bg-elevated);
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
+  border-radius: 8px;
   color: var(--text-primary);
   font-size: var(--font-size-sm);
   cursor: pointer;

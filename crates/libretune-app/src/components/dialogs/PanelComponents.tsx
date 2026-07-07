@@ -4,7 +4,7 @@
  * RecursivePanel) so they live together in this file.
  */
 
-import { useState, useEffect, useLayoutEffect, useRef, memo, useMemo } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, memo, useMemo, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Activity, Grid3X3, AlertTriangle } from 'lucide-react';
 import CurveEditor, { SimpleGaugeInfo } from '../curves/CurveEditor';
@@ -17,13 +17,18 @@ import {
   type CurveData,
   type FieldInfo,
   type IndicatorPanel,
+  type ReadoutPanel,
   type PortEditorConfig,
   buildStdPlaceholderDefinition,
 } from './types';
 import { Indicator } from './fields/Indicator';
 import { IndicatorPanelRenderer } from './fields/IndicatorPanelRenderer';
+import { ReadoutPanelRenderer } from './fields/ReadoutPanelRenderer';
+import { DialogGaugeStack } from './fields/DialogGauge';
 import { CommandButton } from './fields/CommandButton';
 import DialogField from './fields/DialogField';
+import { RuntimeValueReadout } from './fields/RuntimeValueReadout';
+import { isUserTableLiveChannel, isGppwmLiveChannel, isCommandButtonPanel, inferLiveStateGateExpression } from './dialogLayout';
 
 export const RecursivePanel = memo(function RecursivePanel({
   name,
@@ -40,32 +45,23 @@ export const RecursivePanel = memo(function RecursivePanel({
   onFieldFocus?: (info: FieldInfo) => void;
   showAllHelpIcons?: boolean;
 }) {
-  // Debug log on every render
-  console.log(`[RecursivePanel] 🎯 Component render for '${name}'`);
-  
   const [definition, setDefinition] = useState<DialogDefinition | null>(null);
   const [indicatorPanel, setIndicatorPanel] = useState<IndicatorPanel | null>(null);
+  const [readoutPanel, setReadoutPanel] = useState<ReadoutPanel | null>(null);
   const [tableInfo, setTableInfo] = useState<TableInfo | null>(null);
   const [tableData, setTableData] = useState<BackendTableData | null>(null);
   const [curveData, setCurveData] = useState<CurveData | null>(null);
   const [gaugeConfig, setGaugeConfig] = useState<SimpleGaugeInfo | null>(null);
   const [portEditor, setPortEditor] = useState<PortEditorConfig | null>(null);
-  const [panelType, setPanelType] = useState<'loading' | 'dialog' | 'indicatorPanel' | 'table' | 'curve' | 'portEditor' | 'unknown'>('loading');
+  const [panelType, setPanelType] = useState<'loading' | 'dialog' | 'indicatorPanel' | 'readoutPanel' | 'table' | 'curve' | 'portEditor' | 'unknown'>('loading');
 
-  // Log mount ID to track component identity
-  const mountIdRef = useRef(Math.random().toString(36).substring(7));
-  console.log(`[RecursivePanel] 🎯 Component render for '${name}' (mount: ${mountIdRef.current}, panelType: ${panelType}, curveData: ${curveData ? 'SET' : 'NULL'})`);
-
-  // Use useLayoutEffect instead of useEffect to run synchronously
-  // This prevents the effect from being skipped during rapid re-renders
   useLayoutEffect(() => {
-    // Reset state when name changes and track cancellation
     let cancelled = false;
     
-    console.error(`[RecursivePanel] ⚡⚡⚡ LAYOUT EFFECT FIRED for '${name}' (mount: ${mountIdRef.current})`);
     setPanelType('loading');
     setDefinition(null);
     setIndicatorPanel(null);
+    setReadoutPanel(null);
     setTableInfo(null);
     setTableData(null);
     setCurveData(null);
@@ -91,8 +87,17 @@ export const RecursivePanel = memo(function RecursivePanel({
       })
       .catch(() => {
         if (cancelled) return;
-        // Not an indicatorPanel, try as dialog
-        invoke<DialogDefinition>('get_dialog_definition', { name })
+        invoke<ReadoutPanel>('get_readout_panel', { name })
+          .then((panel) => {
+            if (cancelled) return;
+            console.debug(`[RecursivePanel] '${name}' resolved as readoutPanel`);
+            setReadoutPanel(panel);
+            setPanelType('readoutPanel');
+          })
+          .catch(() => {
+            if (cancelled) return;
+            // Not a readoutPanel, try as dialog
+            invoke<DialogDefinition>('get_dialog_definition', { name })
           .then((def) => {
             if (cancelled) return;
             console.debug(`[RecursivePanel] '${name}' resolved as dialog`);
@@ -165,6 +170,7 @@ export const RecursivePanel = memo(function RecursivePanel({
                         // None of the known types - log all errors for debugging
                         console.error(`[RecursivePanel] ❌ Panel '${name}' could not be resolved as any known type:`, {
                           indicatorPanel: 'not an indicatorPanel',
+                          readoutPanel: 'not a readoutPanel',
                           dialog: 'not a dialog',
                           table: String(err),
                           curve: String(err2),
@@ -174,6 +180,7 @@ export const RecursivePanel = memo(function RecursivePanel({
                       });
                   });
               });
+          });
           });
       });
 
@@ -260,12 +267,43 @@ export const RecursivePanel = memo(function RecursivePanel({
     return <IndicatorPanelRenderer panel={indicatorPanel} context={context} />;
   }
 
+  // Render as readoutPanel (live numeric gauges)
+  if (panelType === 'readoutPanel' && readoutPanel) {
+    return <ReadoutPanelRenderer panel={readoutPanel} />;
+  }
+
   // Render as dialog
   if (panelType === 'dialog' && definition) {
+    const gaugeOnly =
+      definition.components.length > 0 &&
+      definition.components.every((c) => c.type === 'Gauge' && c.name);
+    if (gaugeOnly) {
+      const gaugeNames = definition.components
+        .map((c) => c.name)
+        .filter((n): n is string => !!n);
+      return (
+        <div className="nested-panel nested-panel--gauge-stack" data-panel={name}>
+          {definition.title && definition.title !== name && (
+            <div className="panel-title">{definition.title}</div>
+          )}
+          <DialogGaugeStack gaugeNames={gaugeNames} />
+        </div>
+      );
+    }
+
+    const fieldCount = definition.components.filter((c) => c.type === 'Field').length;
+    const multiColumn = fieldCount >= 8;
+    const commandGrid = isCommandButtonPanel(definition.components);
+    const testOtherPanel = /^testother$/i.test(name);
     return (
-      <div className="nested-panel">
+      <div
+        className={`nested-panel${multiColumn ? ' nested-panel--multi' : ''}${commandGrid ? ' nested-panel--compact-commands' : ''}${testOtherPanel ? ' nested-panel--test-other' : ''}`}
+        data-panel={name}
+      >
         {definition.title && definition.title !== name && <div className="panel-title">{definition.title}</div>}
-        <div className="panel-content">
+        <div
+          className={`panel-content${multiColumn ? ' panel-content--multi' : ''}${commandGrid ? ' panel-content--command-grid' : ''}${testOtherPanel ? ' panel-content--test-other' : ''}`}
+        >
           {definition.components.map((comp, i) => (
             <DialogComponentRenderer key={i} comp={comp} openTable={openTable} context={context} onUpdate={onUpdate} onFieldFocus={onFieldFocus} showAllHelpIcons={showAllHelpIcons} />
           ))}
@@ -315,41 +353,72 @@ export function DialogFieldWrapper({
   
   // Evaluate visibility condition (hides field if false)
   useEffect(() => {
-    const visCondition = comp.visibility_condition || (comp.condition && comp.enabled_condition ? undefined : comp.condition);
+    const visCondition =
+      comp.visibility_condition ||
+      (comp.condition && comp.enabled_condition ? comp.condition : undefined);
+    const enCondition =
+      comp.enabled_condition ||
+      (comp.condition && !comp.visibility_condition ? comp.condition : undefined);
+
+    const evaluate = (expression: string) =>
+      invoke<boolean>('evaluate_expression', {
+        expression,
+        context,
+      });
+
     if (visCondition) {
-      invoke<boolean>('evaluate_expression', { 
-        expression: visCondition, 
-        context 
-      })
-        .then((result) => {
-          console.log(`[DialogFieldWrapper] Visibility condition '${visCondition}' for '${comp.name}' evaluated to:`, result);
-          setFieldVisible(result);
-        })
+      evaluate(visCondition)
+        .then((result) => setFieldVisible(result))
         .catch((err) => {
-          console.warn(`[DialogFieldWrapper] Failed to evaluate visibility condition '${visCondition}' for '${comp.name}':`, err);
-          setFieldVisible(true); // Show on error
+          console.warn(
+            `[DialogFieldWrapper] Failed to evaluate visibility condition '${visCondition}' for '${comp.name}':`,
+            err,
+          );
+          setFieldVisible(true);
         });
-    } else {
-      setFieldVisible(true);
+      return;
     }
-  }, [comp.visibility_condition, comp.condition, comp.enabled_condition, context, comp.name]);
-  
-  // Evaluate enable condition (disables field if false)
-  // Per closed-source program suggestion: "all 12 channels should be visible but disabled"
-  useEffect(() => {
-    const enCondition = comp.enabled_condition || (comp.condition && !comp.visibility_condition ? comp.condition : undefined);
+
     if (enCondition) {
-      invoke<boolean>('evaluate_expression', { 
-        expression: enCondition, 
-        context 
+      evaluate(enCondition)
+        .then((result) => setFieldVisible(result))
+        .catch((err) => {
+          console.warn(
+            `[DialogFieldWrapper] Failed to evaluate enable condition '${enCondition}' for '${comp.name}':`,
+            err,
+          );
+          setFieldVisible(true);
+        });
+      return;
+    }
+
+    setFieldVisible(true);
+  }, [comp.visibility_condition, comp.condition, comp.enabled_condition, context, comp.name]);
+
+  // Evaluate enable condition (disables field if false when a separate visibility condition exists)
+  useEffect(() => {
+    if (!comp.visibility_condition) {
+      setFieldEnabled(true);
+      return;
+    }
+
+    const enCondition =
+      comp.enabled_condition ||
+      (comp.condition && !comp.visibility_condition ? comp.condition : undefined);
+    if (enCondition) {
+      invoke<boolean>('evaluate_expression', {
+        expression: enCondition,
+        context,
       })
         .then((result) => {
-          console.log(`[DialogFieldWrapper] Enable condition '${enCondition}' for '${comp.name}' evaluated to:`, result);
           setFieldEnabled(result);
         })
         .catch((err) => {
-          console.warn(`[DialogFieldWrapper] Failed to evaluate enable condition '${enCondition}' for '${comp.name}':`, err);
-          setFieldEnabled(true); // Enable on error
+          console.warn(
+            `[DialogFieldWrapper] Failed to evaluate enable condition '${enCondition}' for '${comp.name}':`,
+            err,
+          );
+          setFieldEnabled(true);
         });
     } else {
       setFieldEnabled(true);
@@ -387,76 +456,123 @@ export function PanelVisibilityWrapper({
   showAllHelpIcons?: boolean;
 }) {
   const [panelVisible, setPanelVisible] = useState<boolean>(true);
-  
-  // Log on every render to verify component is being rendered
-  console.log(`[PanelVisibilityWrapper] Rendering for panel '${comp.name}', condition: '${comp.visibility_condition}', current visible state: ${panelVisible}`);
-  
-  // Use ref to track context without causing re-renders
+
   const contextRef = useRef(context);
   contextRef.current = context;
-  
-  const normalizedVisibilityExpression = useMemo(() => {
-    if (!comp.visibility_condition) return '';
-    let expression = comp.visibility_condition;
+
+  const normalizeExpression = useCallback((expression: string) => {
     if (!expression.includes('{') && !expression.includes('(') && !expression.includes(' ')) {
-      expression = `{${expression}}`;
+      return `{${expression}}`;
     }
     return expression;
-  }, [comp.visibility_condition]);
+  }, []);
 
-  const visibilityContextKey = useMemo(() => {
-    if (!normalizedVisibilityExpression) return '';
-    const varMatches = normalizedVisibilityExpression.match(/\{?(\w+)\}?/g);
-    if (!varMatches) return '';
-    return varMatches
-      .map(v => {
-        const varName = v.replace(/[{}]/g, '');
-        const value = contextRef.current[varName];
-        return `${varName}:${value ?? 0}`;
-      })
+  const liveStateGate = inferLiveStateGateExpression(comp.name ?? '');
+
+  const conditionContextKey = useMemo(() => {
+    const expressions = [
+      comp.visibility_condition,
+      comp.enabled_condition,
+      liveStateGate,
+    ].filter(Boolean) as string[];
+
+    const vars = new Set<string>();
+    for (const expression of expressions) {
+      for (const match of expression.matchAll(/\{?(\w+)\}?/g)) {
+        vars.add(match[1]);
+      }
+    }
+
+    return Array.from(vars)
+      .sort()
+      .map((varName) => `${varName}:${context[varName] ?? 0}`)
       .join('|');
-  }, [normalizedVisibilityExpression, context]);
+  }, [comp.visibility_condition, comp.enabled_condition, comp.name, context]);
 
   useEffect(() => {
-    if (normalizedVisibilityExpression) {
-      // Log visibility condition evaluation for debugging
-      console.log(`[PanelVisibilityWrapper] Evaluating visibility for '${comp.name}': original='${comp.visibility_condition}', parsed='${normalizedVisibilityExpression}'`);
-      
-      // Extract variable names from condition and log their values
-      const varMatches = normalizedVisibilityExpression.match(/\{?(\w+)\}?/g);
-      if (varMatches) {
-        const varValues = varMatches.map(v => {
-          const varName = v.replace(/[{}]/g, '');
-          const value = contextRef.current[varName];
-          return `${varName}=${value !== undefined ? value : 'undefined (defaults to 0)'}`;
-        });
-        console.log(`[PanelVisibilityWrapper] Context for '${comp.name}':`, varValues.join(', '));
+    let cancelled = false;
+
+    const evaluateCondition = async (expression: string) => {
+      return invoke<boolean>('evaluate_expression', {
+        expression: normalizeExpression(expression),
+        context: contextRef.current,
+      });
+    };
+
+    (async () => {
+      try {
+        if (comp.visibility_condition) {
+          const visible = await evaluateCondition(comp.visibility_condition);
+          if (cancelled) return;
+          if (!visible) {
+            setPanelVisible(false);
+            return;
+          }
+        }
+
+        if (comp.enabled_condition) {
+          const enabled = await evaluateCondition(comp.enabled_condition);
+          if (cancelled) return;
+          if (!enabled) {
+            setPanelVisible(false);
+            return;
+          }
+        }
+
+        if (
+          !comp.visibility_condition &&
+          !comp.enabled_condition &&
+          liveStateGate
+        ) {
+          const enabled = await evaluateCondition(liveStateGate);
+          if (cancelled) return;
+          if (!enabled) {
+            setPanelVisible(false);
+            return;
+          }
+        }
+
+        if (!cancelled) {
+          setPanelVisible(true);
+        }
+      } catch (err) {
+        console.warn(
+          `[PanelVisibilityWrapper] Failed to evaluate panel conditions for '${comp.name}':`,
+          err,
+        );
+        if (!cancelled) {
+          setPanelVisible(true);
+        }
       }
-      
-      invoke<boolean>('evaluate_expression', { 
-        expression: normalizedVisibilityExpression, 
-        context: contextRef.current 
-      })
-        .then((result) => {
-          console.log(`[PanelVisibilityWrapper] '${comp.name}' visibility: ${normalizedVisibilityExpression} = ${result}`);
-          setPanelVisible(result);
-        })
-        .catch((err) => {
-          console.warn(`[PanelVisibilityWrapper] Failed to evaluate panel visibility condition '${normalizedVisibilityExpression}':`, err);
-          setPanelVisible(true); // Show on error
-        });
-    } else {
-      setPanelVisible(true);
-    }
-  }, [comp.visibility_condition, comp.name, normalizedVisibilityExpression, visibilityContextKey]);
-  
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    comp.visibility_condition,
+    comp.enabled_condition,
+    comp.name,
+    liveStateGate,
+    conditionContextKey,
+    normalizeExpression,
+  ]);
+
   if (!panelVisible || !comp.name) {
-    console.log(`[PanelVisibilityWrapper] Skipping render for '${comp.name}': panelVisible=${panelVisible}, comp.name=${comp.name}`);
     return null;
   }
-  
-  console.log(`[PanelVisibilityWrapper] ✅ About to render RecursivePanel for '${comp.name}'`);
-  return <RecursivePanel key={`panel-${comp.name}`} name={comp.name} openTable={openTable} context={context} onUpdate={onUpdate} onFieldFocus={onFieldFocus} showAllHelpIcons={showAllHelpIcons} />;
+
+  return (
+    <RecursivePanel
+      key={`panel-${comp.name}`}
+      name={comp.name}
+      openTable={openTable}
+      context={context}
+      onUpdate={onUpdate}
+      onFieldFocus={onFieldFocus}
+      showAllHelpIcons={showAllHelpIcons}
+    />
+  );
 }
 
 export function DialogComponentRenderer({
@@ -479,8 +595,39 @@ export function DialogComponentRenderer({
   if (comp.type === 'Field' && comp.name) {
     return <DialogFieldWrapper comp={comp} context={context} onUpdate={onUpdate} onOptimisticUpdate={onOptimisticUpdate} onFieldFocus={onFieldFocus} showAllHelpIcons={showAllHelpIcons} />;
   }
+  if (comp.type === 'RuntimeValue' && comp.name) {
+    if (isUserTableLiveChannel(comp.name) || isGppwmLiveChannel(comp.name)) {
+      return null;
+    }
+    return (
+      <RuntimeValueReadout
+        label={comp.label || comp.name}
+        channel={comp.name}
+        visibilityCondition={comp.visibility_condition}
+        context={context}
+      />
+    );
+  }
   if (comp.type === 'Label' && comp.text) {
-    return <div className="dialog-label">{comp.text}</div>;
+    const text = comp.text.trim();
+    if (/^https?:\/\//i.test(text)) {
+      return (
+        <div className="dialog-label dialog-link">
+          <a href={text} target="_blank" rel="noopener noreferrer">
+            {text}
+          </a>
+        </div>
+      );
+    }
+    const isSection = text.startsWith('#');
+    const isNote = text.startsWith('!');
+    return (
+      <div
+        className={`dialog-label${isSection ? ' dialog-section-header' : ''}${isNote ? ' dialog-note' : ''}`}
+      >
+        {isSection ? text.replace(/^#+\s*/, '') : isNote ? text.replace(/^!+\s*/, '') : comp.text}
+      </div>
+    );
   }
   if (comp.type === 'Table' && comp.name) {
     // Use RecursivePanel to handle table rendering (embedded or link fallback)
@@ -495,8 +642,10 @@ export function DialogComponentRenderer({
     );
   }
   if (comp.type === 'Panel' && comp.name) {
-    console.log(`[DialogComponentRenderer] Rendering Panel component: ${comp.name}, visibility_condition: ${comp.visibility_condition || 'none'}`);
     return <PanelVisibilityWrapper comp={comp} openTable={openTable} context={context} onUpdate={onUpdate} onFieldFocus={onFieldFocus} showAllHelpIcons={showAllHelpIcons} />;
+  }
+  if (comp.type === 'Gauge' && comp.name) {
+    return <DialogGaugeStack gaugeNames={[comp.name]} />;
   }
   if (comp.type === 'Indicator') {
     return <Indicator comp={comp} context={context} />;

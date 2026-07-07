@@ -5,7 +5,7 @@
 // and `get_port_editor`.
 
 export interface DialogComponent {
-  type: 'Panel' | 'Field' | 'LiveGraph' | 'Table' | 'Label' | 'Indicator' | 'CommandButton';
+  type: 'Panel' | 'Field' | 'RuntimeValue' | 'LiveGraph' | 'Table' | 'Label' | 'Indicator' | 'CommandButton' | 'Gauge';
   name?: string;
   label?: string;
   text?: string;
@@ -91,6 +91,19 @@ export interface IndicatorPanel {
     color_off_bg?: string;
     color_on_fg?: string;
     color_on_bg?: string;
+  }>;
+}
+
+export interface ReadoutPanel {
+  name: string;
+  columns: number;
+  visibility_condition?: string;
+  readouts: Array<{
+    channel: string;
+    title: string;
+    units: string;
+    digits: number;
+    precision: number;
   }>;
 }
 

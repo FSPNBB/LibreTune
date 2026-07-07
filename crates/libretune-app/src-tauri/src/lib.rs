@@ -86,6 +86,10 @@ use commands::diagnostic_loggers::{
 };
 use commands::dyno::{compare_dyno_runs, detect_dyno_headers, load_dyno_run};
 use commands::find_inis::find_matching_inis;
+use commands::firmware_update::{
+    get_firmware_flasher_info, get_firmware_update_guidance, recover_ecu_firmware_dfu,
+    update_ecu_firmware,
+};
 use commands::get_table_data::get_table_data;
 use commands::git::{
     git_checkout, git_commit, git_create_branch, git_current_branch, git_diff, git_has_changes,
@@ -96,6 +100,7 @@ use commands::hotkeys::{
 };
 use commands::ini_dialogs::{
     evaluate_expression, get_dialog_definition, get_help_topic, get_indicator_panel,
+    get_readout_panel,
     get_port_editor, get_port_editor_assignments, save_port_editor_assignments,
 };
 use commands::ini_meta::{
@@ -233,6 +238,7 @@ pub fn run() {
             get_searchable_index,
             get_dialog_definition,
             get_indicator_panel,
+            get_readout_panel,
             get_port_editor,
             get_port_editor_assignments,
             save_port_editor_assignments,
@@ -311,6 +317,10 @@ pub fn run() {
             list_tune_files,
             burn_to_ecu,
             execute_controller_command,
+            get_firmware_flasher_info,
+            get_firmware_update_guidance,
+            update_ecu_firmware,
+            recover_ecu_firmware_dfu,
             use_project_tune,
             use_ecu_tune,
             mark_tune_modified,

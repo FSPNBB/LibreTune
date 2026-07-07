@@ -7,10 +7,10 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { ArrowLeft, Save, Zap, Undo2, Redo2, AlertTriangle } from 'lucide-react';
-import TsGauge from '../gauges/TsGauge';
+import { ArrowLeft, Save, Flame, Undo2, Redo2, AlertTriangle } from 'lucide-react';
+import { GaugeLiveReadout } from '../gauges/GaugeLiveReadout';
 import { TsGaugeConfig } from '../dashboards/dashTypes';
-import { valueToHeatmapColor } from '../../utils/heatmapColors';
+import { valueToHeatmapColor, textColorForBackground } from '../../utils/heatmapColors';
 import { useChannelValue } from '../../stores/realtimeStore';
 import './CurveEditor.css';
 
@@ -29,8 +29,8 @@ export interface SimpleGaugeInfo {
   digits: number;
 }
 
-/** Convert SimpleGaugeInfo to TsGaugeConfig for rendering */
-function toTsGaugeConfig(gauge: SimpleGaugeInfo): TsGaugeConfig {
+/** Convert SimpleGaugeInfo to TsGaugeConfig for embedded dialog/curve gauges */
+export function toTsGaugeConfig(gauge: SimpleGaugeInfo): TsGaugeConfig {
   return {
     id: gauge.name,
     gauge_painter: 'AnalogGauge',
@@ -217,6 +217,14 @@ export default function CurveEditor({
   const getCellColor = useCallback((value: number, min: number, max: number): string => {
     return valueToHeatmapColor(value, min, max, 'tunerstudio');
   }, []);
+
+  const getHeatmapCellStyle = useCallback((value: number, min: number, max: number): React.CSSProperties => {
+    const backgroundColor = getCellColor(value, min, max);
+    return {
+      backgroundColor,
+      color: textColorForBackground(backgroundColor),
+    };
+  }, [getCellColor]);
 
   // Chart dimensions based on mode
   const chartWidth = embedded ? 500 : 500;
@@ -655,6 +663,7 @@ Suggestion: {errorInfo.suggestion}
       className={`curve-editor ${embedded ? 'embedded' : 'standalone'}`}
       ref={containerRef}
       tabIndex={0} // Enable keyboard focus for undo/redo shortcuts
+      style={embedded ? ({ '--curve-embedded-width': `${chartWidth}px` } as React.CSSProperties) : undefined}
     >
       {/* Header - only for standalone mode */}
       {!embedded && (
@@ -685,7 +694,7 @@ Suggestion: {errorInfo.suggestion}
               <Save size={16} />
             </button>
             <button className="toolbar-btn" title="Burn to ECU">
-              <Zap size={16} />
+              <Flame size={16} />
             </button>
           </div>
         </div>
@@ -836,16 +845,6 @@ Suggestion: {errorInfo.suggestion}
         {/* Bottom section: gauge + data table (embedded only uses stacked layout) */}
         {embedded ? (
           <div className="curve-bottom-section">
-            {/* Gauge */}
-            {(gaugeConfig || simpleGaugeInfo) && (
-              <div className="curve-gauge-container">
-                <TsGauge 
-                  config={gaugeConfig || toTsGaugeConfig(simpleGaugeInfo!)} 
-                  value={gaugeValue} 
-                />
-              </div>
-            )}
-            {/* Data table */}
             <div className="curve-data-table">
           <table>
             <thead>
@@ -857,8 +856,8 @@ Suggestion: {errorInfo.suggestion}
             <tbody>
               {data.x_bins.map((x, i) => {
                 const yValue = localYBins[i];
-                const yColor = getCellColor(yValue, yAxis.min, yAxis.max);
-                const xColor = getCellColor(x, xAxis.min, xAxis.max);
+                const xCellStyle = getHeatmapCellStyle(x, xAxis.min, xAxis.max);
+                const yCellStyle = getHeatmapCellStyle(yValue, yAxis.min, yAxis.max);
                 
                 return (
                   <tr
@@ -866,10 +865,10 @@ Suggestion: {errorInfo.suggestion}
                     className={selectedPoint === i ? 'selected' : ''}
                     onClick={() => handleRowClick(i)}
                   >
-                    <td className="x-cell" style={{ backgroundColor: xColor }}>{x.toFixed(2)}</td>
+                    <td className="x-cell" style={xCellStyle}>{x.toFixed(2)}</td>
                     <td
                       className="y-cell"
-                      style={{ backgroundColor: yColor }}
+                      style={yCellStyle}
                       onDoubleClick={() => handleCellDoubleClick(i)}
                     >
                       {editingCell === i ? (
@@ -891,6 +890,14 @@ Suggestion: {errorInfo.suggestion}
             </tbody>
           </table>
         </div>
+            {(gaugeConfig || simpleGaugeInfo) && (
+              <GaugeLiveReadout
+                className="curve-live-readout"
+                gaugeInfo={simpleGaugeInfo}
+                gaugeConfig={gaugeConfig}
+                value={gaugeValue}
+              />
+            )}
           </div>
         ) : (
           /* Standalone mode: table beside chart */
@@ -905,8 +912,8 @@ Suggestion: {errorInfo.suggestion}
               <tbody>
                 {data.x_bins.map((x, i) => {
                   const yValue = localYBins[i];
-                  const yColor = getCellColor(yValue, yAxis.min, yAxis.max);
-                  const xColor = getCellColor(x, xAxis.min, xAxis.max);
+                  const xCellStyle = getHeatmapCellStyle(x, xAxis.min, xAxis.max);
+                  const yCellStyle = getHeatmapCellStyle(yValue, yAxis.min, yAxis.max);
                   
                   return (
                     <tr
@@ -914,10 +921,10 @@ Suggestion: {errorInfo.suggestion}
                       className={selectedPoint === i ? 'selected' : ''}
                       onClick={() => handleRowClick(i)}
                     >
-                      <td className="x-cell" style={{ backgroundColor: xColor }}>{x.toFixed(2)}</td>
+                      <td className="x-cell" style={xCellStyle}>{x.toFixed(2)}</td>
                       <td
                         className="y-cell"
-                        style={{ backgroundColor: yColor }}
+                        style={yCellStyle}
                         onDoubleClick={() => handleCellDoubleClick(i)}
                       >
                         {editingCell === i ? (
