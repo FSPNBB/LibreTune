@@ -122,6 +122,12 @@ pub struct IniCapabilities {
     pub has_wue_analyze: bool,
     pub has_gamma_e: bool,
     pub supports_console: bool,
+    /// Name of the `cmd_dfu` controller command when defined in the INI.
+    pub dfu_command_name: Option<String>,
+    /// Name of the `cmd_openblt` controller command when defined in the INI.
+    pub openblt_command_name: Option<String>,
+    /// Name of the ECU Lua script string constant (typically `luaScript`).
+    pub lua_script_constant: Option<String>,
 }
 
 /// Data types supported by ECU constants
@@ -481,6 +487,10 @@ pub enum DialogComponent {
         name: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         position: Option<String>,
+        /// Enable condition (first brace on dual-condition panels)
+        #[serde(skip_serializing_if = "Option::is_none")]
+        enabled_condition: Option<String>,
+        /// Visibility condition (second brace on dual-condition panels; sole brace when visibility-only)
         #[serde(skip_serializing_if = "Option::is_none")]
         visibility_condition: Option<String>,
     },
@@ -492,6 +502,13 @@ pub enum DialogComponent {
         visibility_condition: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         enabled_condition: Option<String>,
+    },
+    /// Live output-channel readout (TunerStudio runtimeValue)
+    RuntimeValue {
+        label: String,
+        name: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        visibility_condition: Option<String>,
     },
     /// A live graph visualization
     LiveGraph {
@@ -520,6 +537,12 @@ pub enum DialogComponent {
         /// Behavior on dialog close
         #[serde(skip_serializing_if = "Option::is_none")]
         on_close_behavior: Option<CommandButtonCloseAction>,
+    },
+    /// Embedded gauge from [GaugeConfigurations] (TunerStudio dialog gauge = lines)
+    Gauge {
+        name: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        position: Option<String>,
     },
 }
 
@@ -1153,6 +1176,35 @@ pub struct IndicatorDefinition {
     /// Optional background color when on (default: black)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub color_on_bg: Option<String>,
+}
+
+/// Live numeric readout panel (TunerStudio readoutPanel)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReadoutPanel {
+    /// Panel name/ID
+    pub name: String,
+    /// Number of columns for layout
+    pub columns: u8,
+    /// Optional visibility condition
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub visibility_condition: Option<String>,
+    /// Readouts within this panel
+    pub readouts: Vec<ReadoutDefinition>,
+}
+
+/// Individual readout within a readout panel
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReadoutDefinition {
+    /// Output channel name
+    pub channel: String,
+    /// Display title
+    pub title: String,
+    /// Units string
+    pub units: String,
+    /// Digit count (legacy TunerStudio field)
+    pub digits: u8,
+    /// Decimal precision
+    pub precision: u8,
 }
 
 /// Key action (keyboard shortcut) definition

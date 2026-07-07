@@ -74,7 +74,17 @@ export async function openTargetImpl(
   }
 
   if (name === "lua-console") {
-    showToast("Lua Console is not available for this ECU definition.", "warning");
+    if (!iniCapabilities?.supports_console) {
+      showToast("Lua Console is not available for this ECU definition.", "warning");
+      return;
+    }
+    if (!iniCapabilities?.lua_script_constant) {
+      showToast("This ECU definition has no luaScript constant.", "warning");
+      return;
+    }
+    setTabs([...tabs, { id: "lua-console", title: title || "ECU Lua Editor", icon: "terminal" }]);
+    setTabContents({ ...tabContents, "lua-console": { type: "lua-console" } });
+    setActiveTabId("lua-console");
     return;
   }
 
@@ -174,6 +184,8 @@ export async function openTargetImpl(
     return;
   } catch (portErr) {
     const tableErrStr = tableErr instanceof Error ? tableErr.message : String(tableErr);
+    const curveErrStr = curveErr instanceof Error ? curveErr.message : String(curveErr);
+    const dialogErrStr = dialogErr instanceof Error ? dialogErr.message : String(dialogErr);
     console.error(
       "[openTarget] Failed to open target:", name,
       "table error:", tableErr,
@@ -182,10 +194,17 @@ export async function openTargetImpl(
       "portEditor error:", portErr,
     );
 
+    const detail =
+      !curveErrStr.includes("not found") && !curveErrStr.includes("Definition not loaded")
+        ? curveErrStr
+        : !dialogErrStr.includes("not found") && !dialogErrStr.includes("Definition not loaded")
+          ? dialogErrStr
+          : tableErrStr;
+
     if (tableErrStr.includes("Definition not loaded")) {
       showToast(`Please wait - INI definition is still loading...`, "warning");
     } else {
-      showToast(`Could not open "${title || name}" - ${tableErrStr}`, "warning");
+      showToast(`Could not open "${title || name}" - ${detail}`, "warning");
     }
   }
 }

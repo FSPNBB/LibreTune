@@ -28,6 +28,8 @@ import TuneHistoryPanel from "./TuneHistoryPanel";
 import ErrorDetailsDialog from "./dialogs/ErrorDetailsDialog";
 import OnboardingDialog from "./dialogs/OnboardingDialog";
 import { PluginPanel } from "./PluginPanel";
+import { ControllerCommandDialog } from "./console/ControllerCommandDialog";
+import { FirmwareUpdateDialog } from "./dialogs/FirmwareUpdateDialog";
 import { ThemeName } from "../themes";
 import {
   type ConnectionStatus,
@@ -38,6 +40,7 @@ import {
   type ProjectInfo,
   type ProtocolDefaults,
   type TabContent,
+  type IniCapabilities,
 } from "../types/app";
 
 type SyncProgress = { percent: number } | null;
@@ -58,6 +61,9 @@ export interface DialogOverlaysProps {
   setLoadDialogOpen: (v: boolean) => void;
   burnDialogOpen: boolean;
   setBurnDialogOpen: (v: boolean) => void;
+  firmwareUpdateDialogOpen: boolean;
+  setFirmwareUpdateDialogOpen: (v: boolean) => void;
+  iniCapabilities: IniCapabilities | null;
   newTuneDialogOpen: boolean;
   setNewTuneDialogOpen: (v: boolean) => void;
 
@@ -94,10 +100,12 @@ export interface DialogOverlaysProps {
   handleTimeoutChange: (v: number) => void;
   connect: () => Promise<void> | void;
   disconnect: () => Promise<void> | void;
-  refreshPorts: () => Promise<void> | void;
+  refreshPorts: () => Promise<string[]> | Promise<void> | void;
   connecting: boolean;
   syncing: boolean;
   syncProgress: SyncProgress;
+  lastSerialPort: string | null;
+  connectionPhase?: import('../utils/connectionWorkflow').ConnectionPhase;
   iniDefaults: ProtocolDefaults | null;
   applyIniDefaults: () => void;
   connectionRuntimePacketMode: any;
@@ -185,6 +193,7 @@ export function DialogOverlays(props: DialogOverlaysProps) {
     saveDialogOpen, setSaveDialogOpen, autoBurnOnClose,
     loadDialogOpen, setLoadDialogOpen,
     burnDialogOpen, setBurnDialogOpen,
+    firmwareUpdateDialogOpen, setFirmwareUpdateDialogOpen, iniCapabilities,
     newTuneDialogOpen, setNewTuneDialogOpen,
     settingsDialogOpen, setSettingsDialogOpen,
     setUnitsSystem, setAutoBurnOnClose, setStatus, setStatusBarChannels, setDefaultRuntimePacketMode,
@@ -194,7 +203,8 @@ export function DialogOverlays(props: DialogOverlaysProps) {
     ports, selectedPort, baudRate, timeoutMs, connectionType, setConnectionType,
     tcpHost, setTcpHost, tcpPort, setTcpPort, setSelectedPort,
     handleBaudChange, handleTimeoutChange, connect, disconnect, refreshPorts,
-    connecting, syncing, syncProgress, iniDefaults, applyIniDefaults,
+    connecting, syncing, syncProgress, lastSerialPort, connectionPhase,
+    iniDefaults, applyIniDefaults,
     connectionRuntimePacketMode, setConnectionRuntimePacketMode,
     newProjectDialogOpen, setNewProjectDialogOpen,
     repositoryInis, setRepositoryInis, createProject, handleImportTuneIntoProject,
@@ -224,6 +234,12 @@ export function DialogOverlays(props: DialogOverlaysProps) {
       <SaveDialog isOpen={saveDialogOpen} onClose={() => setSaveDialogOpen(false)} autoBurnOnClose={autoBurnOnClose} />
       <LoadDialog isOpen={loadDialogOpen} onClose={() => setLoadDialogOpen(false)} />
       <BurnDialog isOpen={burnDialogOpen} onClose={() => setBurnDialogOpen(false)} connected={status.state === "Connected"} />
+      <FirmwareUpdateDialog
+        isOpen={firmwareUpdateDialogOpen}
+        onClose={() => setFirmwareUpdateDialogOpen(false)}
+        isConnected={status.state === "Connected"}
+        iniCapabilities={iniCapabilities}
+      />
       <NewTuneDialog isOpen={newTuneDialogOpen} onClose={() => setNewTuneDialogOpen(false)} />
       <SettingsDialog
         isOpen={settingsDialogOpen}
@@ -258,6 +274,9 @@ export function DialogOverlays(props: DialogOverlaysProps) {
         onTcpPortChange={setTcpPort}
         connected={status.state === "Connected"}
         connecting={connecting || syncing}
+        autoConnectEnabled={!!currentProject?.connection.auto_connect}
+        rememberedPort={currentProject?.connection.port ?? lastSerialPort}
+        connectionPhase={connectionPhase}
         onPortChange={setSelectedPort}
         onBaudChange={handleBaudChange}
         onTimeoutChange={handleTimeoutChange}
@@ -420,6 +439,7 @@ export function DialogOverlays(props: DialogOverlaysProps) {
           </div>
         </div>
       )}
+      <ControllerCommandDialog />
     </>
   );
 }

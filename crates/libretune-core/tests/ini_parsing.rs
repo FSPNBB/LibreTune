@@ -420,3 +420,215 @@ fn test_parse_windows_1252_ini_with_portuguese() {
         "signature must not contain replacement chars: {sig:?}"
     );
 }
+
+#[test]
+fn test_parse_runtime_value_dialog_component() {
+    let ini_content = r#"
+[MegaTune]
+signature = "Test ECU"
+queryCommand = "Q"
+
+[Constants]
+page = 1
+
+[UserDefined]
+dialog = userTable1left, ""
+    field = "Enabled", userTable1Enabled
+    runtimeValue = "X Axis value", userTableXAxis1, { userTable1Enabled }
+    runtimeValue = "Output value", userTableOutput1
+"#;
+
+    let temp_path = std::env::temp_dir().join("test_runtime_value.ini");
+    std::fs::write(&temp_path, ini_content).expect("Failed to write temp file");
+
+    let def = EcuDefinition::from_file(&temp_path).expect("Failed to parse INI");
+    let dialog = def.dialogs.get("userTable1left").expect("dialog missing");
+    assert_eq!(dialog.components.len(), 3);
+
+    match &dialog.components[1] {
+        libretune_core::ini::DialogComponent::RuntimeValue {
+            label,
+            name,
+            visibility_condition,
+        } => {
+            assert_eq!(label, "X Axis value");
+            assert_eq!(name, "userTableXAxis1");
+            assert_eq!(
+                visibility_condition.as_deref(),
+                Some("userTable1Enabled")
+            );
+        }
+        other => panic!("expected RuntimeValue, got {other:?}"),
+    }
+
+    let _ = std::fs::remove_file(&temp_path);
+}
+
+#[test]
+fn test_parse_readout_panel() {
+    let ini_content = r#"
+[MegaTune]
+signature = "Test ECU"
+queryCommand = "Q"
+
+[Constants]
+page = 1
+
+[UserDefined]
+readoutPanel = wmiReadoutPanel, 1
+    readout = wmiState, "WMI state", "", 0, 0, 0, 0, 4, 4, 0, 0
+    readout = wmiPumpDuty, "WMI pump duty", "%", 0, 0, 0, 0, 100, 100, 1, 1
+"#;
+
+    let temp_path = std::env::temp_dir().join("test_readout_panel.ini");
+    std::fs::write(&temp_path, ini_content).expect("Failed to write temp file");
+
+    let def = EcuDefinition::from_file(&temp_path).expect("Failed to parse INI");
+    let panel = def.readout_panels.get("wmiReadoutPanel").expect("panel missing");
+    assert_eq!(panel.columns, 1);
+    assert_eq!(panel.readouts.len(), 2);
+    assert_eq!(panel.readouts[0].channel, "wmiState");
+    assert_eq!(panel.readouts[0].title, "WMI state");
+    assert_eq!(panel.readouts[1].units, "%");
+    assert_eq!(panel.readouts[1].precision, 1);
+
+    let _ = std::fs::remove_file(&temp_path);
+}
+
+#[test]
+fn test_parse_dialog_gauge_components() {
+    use libretune_core::ini::{DialogComponent, EcuDefinition};
+
+    let ini_content = r#"
+[MegaTune]
+signature = "Test ECU"
+queryCommand = "Q"
+
+[Constants]
+page = 1
+
+[GaugeConfigurations]
+gauge = VBattGauge, "Battery", "V", volts, 8, 16, 10, 14, 8, 15, 1
+
+[UserDefined]
+dialog = injTest_r, "Reference gauges", yAxis
+    gauge = VBattGauge, North
+    gauge = testBenchIterGauge, South
+"#;
+
+    let temp_path = std::env::temp_dir().join("test_dialog_gauge.ini");
+    std::fs::write(&temp_path, ini_content).expect("Failed to write temp file");
+
+    let def = EcuDefinition::from_file(&temp_path).expect("Failed to parse INI");
+    let dialog = def.dialogs.get("injTest_r").expect("injTest_r missing");
+    assert_eq!(dialog.components.len(), 2);
+
+    match &dialog.components[0] {
+        DialogComponent::Gauge { name, position } => {
+            assert_eq!(name, "VBattGauge");
+            assert_eq!(position.as_deref(), Some("North"));
+        }
+        other => panic!("expected Gauge, got {:?}", other),
+    }
+
+    let _ = std::fs::remove_file(&temp_path);
+}
+
+
+#[test]
+fn test_parse_panel_dual_condition() {
+    use libretune_core::ini::{DialogComponent, EcuDefinition};
+
+    let ini_content = r#"
+[MegaTune]
+signature = "Test ECU"
+queryCommand = "Q"
+
+[Constants]
+page = 1
+
+[UserDefined]
+dialog = wmiLiveStateDialog, "WMI live state"
+    panel = wmiReadoutPanel
+    panel = WmiEgtStatusDialog, { 1 }, { isWmiEnableEgtFault }
+
+dialog = userTable1TblSettings
+    panel = userTable1left, West
+    panel = userTable1Tbl, Center, { userTable1Enabled }
+"#;
+
+    let temp_path = std::env::temp_dir().join("test_panel_dual_condition.ini");
+    std::fs::write(&temp_path, ini_content).expect("Failed to write temp file");
+
+    let def = EcuDefinition::from_file(&temp_path).expect("Failed to parse INI");
+
+    let wmi_dialog = def
+        .dialogs
+        .get("wmiLiveStateDialog")
+        .expect("wmiLiveStateDialog missing");
+    assert_eq!(wmi_dialog.components.len(), 2);
+
+    match &wmi_dialog.components[1] {
+        DialogComponent::Panel {
+            name,
+            enabled_condition,
+            visibility_condition,
+            ..
+        } => {
+            assert_eq!(name, "WmiEgtStatusDialog");
+            assert!(enabled_condition.is_none(), "{{1}} is a no-op enable placeholder");
+            assert_eq!(
+                visibility_condition.as_deref(),
+                Some("isWmiEnableEgtFault"),
+                "second brace controls panel visibility"
+            );
+        }
+        other => panic!("expected Panel, got {:?}", other),
+    }
+
+    let user_table_dialog = def
+        .dialogs
+        .get("userTable1TblSettings")
+        .expect("userTable1TblSettings missing");
+    match &user_table_dialog.components[1] {
+        DialogComponent::Panel {
+            name,
+            position,
+            visibility_condition,
+            enabled_condition,
+            ..
+        } => {
+            assert_eq!(name, "userTable1Tbl");
+            assert_eq!(position.as_deref(), Some("Center"));
+            assert!(visibility_condition.is_none());
+            assert_eq!(
+                enabled_condition.as_deref(),
+                Some("userTable1Enabled")
+            );
+        }
+        other => panic!("expected Panel, got {:?}", other),
+    }
+
+    let _ = std::fs::remove_file(&temp_path);
+}
+
+#[test]
+fn test_parse_curve_ybins_with_output_channel() {
+    let ini = r#"
+[MegaTune]
+signature = "test"
+
+[CurveEditor]
+curve = cltIdleRPMCurve, "Idle Target RPM"
+    xBins = cltIdleRpmBins, coolant
+    yBins = cltIdleRpm, RPMValue
+"#;
+
+    let def = EcuDefinition::from_str(ini).expect("parse curve yBins");
+    let curve = def
+        .get_curve_by_name_or_map("cltIdleRPMCurve")
+        .expect("curve");
+    assert_eq!(curve.x_bins, "cltIdleRpmBins");
+    assert_eq!(curve.x_output_channel.as_deref(), Some("coolant"));
+    assert_eq!(curve.y_bins, "cltIdleRpm");
+}

@@ -122,6 +122,9 @@ pub struct EcuDefinition {
     /// Indicator panels (groups of boolean indicators)
     pub indicator_panels: HashMap<String, IndicatorPanel>,
 
+    /// Live numeric readout panels (TunerStudio readoutPanel)
+    pub readout_panels: HashMap<String, ReadoutPanel>,
+
     /// Controller commands
     pub controller_commands: HashMap<String, ControllerCommand>,
 
@@ -336,6 +339,23 @@ impl EcuDefinition {
             has_gamma_e: self.gamma_e.is_some(),
             supports_console: self.ecu_type.supports_console()
                 && !self.controller_commands.is_empty(),
+            dfu_command_name: self
+                .controller_commands
+                .keys()
+                .find(|k| k.eq_ignore_ascii_case("cmd_dfu"))
+                .cloned(),
+            openblt_command_name: self
+                .controller_commands
+                .keys()
+                .find(|k| k.eq_ignore_ascii_case("cmd_openblt"))
+                .cloned(),
+            lua_script_constant: self
+                .constants
+                .iter()
+                .find(|(name, c)| {
+                    name.eq_ignore_ascii_case("luaScript") && c.data_type == DataType::String
+                })
+                .map(|(name, _)| name.clone()),
         }
     }
 }
@@ -370,6 +390,7 @@ impl Default for EcuDefinition {
             default_values: HashMap::new(),
             frontpage: None,
             indicator_panels: HashMap::new(),
+            readout_panels: HashMap::new(),
             controller_commands: HashMap::new(),
             logger_definitions: HashMap::new(),
             port_editors: HashMap::new(),

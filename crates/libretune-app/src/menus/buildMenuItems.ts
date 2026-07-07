@@ -1,5 +1,6 @@
 import type { TFunction } from "i18next";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { MenuItem as TunerMenuItem, Tab } from "../components/tuner-ui";
 import { THEME_INFO, ThemeName } from "../themes";
 import type {
@@ -34,6 +35,7 @@ export interface BuildMenuItemsDeps {
   setSaveDialogOpen: (open: boolean) => void;
   setLoadDialogOpen: (open: boolean) => void;
   setBurnDialogOpen: (open: boolean) => void;
+  setFirmwareUpdateDialogOpen: (open: boolean) => void;
   setRestorePointsOpen: (open: boolean) => void;
   setTuneHistoryOpen: (open: boolean) => void;
   setSettingsDialogOpen: (open: boolean) => void;
@@ -54,13 +56,19 @@ export interface BuildMenuItemsDeps {
   setActiveTabId: (id: string) => void;
 }
 
+function quitApp(): void {
+  getCurrentWindow()
+    .close()
+    .catch((err) => console.error("[quitApp] Failed to close window:", err));
+}
+
 export function buildMenuItems(deps: BuildMenuItemsDeps): TunerMenuItem[] {
   const {
     t, currentProject, status, ecuType, iniCapabilities, backendMenus, theme,
     sidebarVisible, tabs, openTarget, handleStdTarget, openHelpTopic, showToast,
     closeProject, handleCreateRestorePoint,
     setNewProjectDialogOpen, setImportProjectOpen, setSaveDialogOpen, setLoadDialogOpen,
-    setBurnDialogOpen, setRestorePointsOpen, setTuneHistoryOpen, setSettingsDialogOpen,
+    setBurnDialogOpen, setFirmwareUpdateDialogOpen, setRestorePointsOpen, setTuneHistoryOpen, setSettingsDialogOpen,
     setMathChannelsDialogOpen, setBaseMapDialogOpen, setTableComparisonOpen,
     setTuneFileDiffOpen, setDynoOverlayOpen, setPluginPanelOpen, setConnectionDialogOpen,
     setUserManualOpen, setUserManualSection, setAboutDialogOpen, setSidebarVisible,
@@ -83,7 +91,7 @@ export function buildMenuItems(deps: BuildMenuItemsDeps): TunerMenuItem[] {
         { id: "sep3", label: "", separator: true },
         { id: "burn", label: "&Burn to ECU\tCtrl+B", onClick: () => setBurnDialogOpen(true), disabled: status.state !== "Connected" },
         { id: "sep4", label: "", separator: true },
-        { id: "exit", label: "E&xit", onClick: () => window.close() },
+        { id: "exit", label: "E&xit", onClick: quitApp },
       ]
     : [
         { id: "new-project", label: "&New Project...\tCtrl+N", onClick: () => setNewProjectDialogOpen(true) },
@@ -91,7 +99,7 @@ export function buildMenuItems(deps: BuildMenuItemsDeps): TunerMenuItem[] {
         { id: "sep1", label: "", separator: true },
         { id: "settings", label: "&Settings...", onClick: () => setSettingsDialogOpen(true) },
         { id: "sep2", label: "", separator: true },
-        { id: "exit", label: "E&xit", onClick: () => window.close() },
+        { id: "exit", label: "E&xit", onClick: quitApp },
       ];
 
   const fileMenu: TunerMenuItem = { id: "file", label: t('file.title'), items: fileMenuItems };
@@ -155,6 +163,7 @@ export function buildMenuItems(deps: BuildMenuItemsDeps): TunerMenuItem[] {
           return {
             id: `${prefix}-submenu-${idx}`,
             label: item.label || "",
+            disabled: item.enabled === false,
             items: convertMenuItems(item.items, `${prefix}-${idx}`),
           };
         }
@@ -162,6 +171,7 @@ export function buildMenuItems(deps: BuildMenuItemsDeps): TunerMenuItem[] {
           return {
             id: item.target || `${prefix}-std-${idx}`,
             label: item.label || "",
+            disabled: item.enabled === false,
             onClick: () => handleStdTarget(item.target || "", item.label || ""),
           };
         }
@@ -169,12 +179,14 @@ export function buildMenuItems(deps: BuildMenuItemsDeps): TunerMenuItem[] {
           return {
             id: item.target || `${prefix}-help-${idx}`,
             label: item.label || "",
+            disabled: item.enabled === false,
             onClick: () => openHelpTopic(item.target || "", item.label || ""),
           };
         }
         return {
           id: item.target || `${prefix}-item-${idx}`,
           label: item.label || "",
+          disabled: item.enabled === false,
           onClick: () => item.target && openTarget(item.target, item.label),
         };
       });
@@ -209,6 +221,38 @@ export function buildMenuItems(deps: BuildMenuItemsDeps): TunerMenuItem[] {
       onClick: () => openTarget("console", `Console - ${ecuType}`),
       disabled: !currentProject || status.state !== "Connected",
     });
+    if (caps.lua_script_constant) {
+      toolItems.push({
+        id: "lua-console",
+        label: "ECU &Lua Editor",
+        onClick: () => openTarget("lua-console", "ECU Lua Editor"),
+        disabled: !currentProject,
+      });
+    }
+    if (caps.dfu_command_name || caps.openblt_command_name) {
+      toolItems.push({
+        id: "firmware-update",
+        label: "Update ECU &Firmware…",
+        onClick: () => setFirmwareUpdateDialogOpen(true),
+        disabled: !currentProject || status.state !== "Connected",
+      });
+    }
+    if (caps.dfu_command_name) {
+      toolItems.push({
+        id: "enter-dfu",
+        label: "Enter &DFU Mode…",
+        onClick: () => {
+          window.dispatchEvent(new CustomEvent('controller-command:prompt', {
+            detail: {
+              commandName: caps.dfu_command_name,
+              label: 'Enter DFU Mode',
+              description: 'Reset the ECU into DFU (firmware update) mode. The connection will drop — use STM32CubeProgrammer, dfu-util, or your board\'s flash tool to update firmware.',
+            },
+          }));
+        },
+        disabled: !currentProject || status.state !== "Connected",
+      });
+    }
   }
   if (toolItems.length > 0) toolItems.push({ id: "sep3", label: "", separator: true });
   toolItems.push({ id: "compare-tables", label: "Table &Compare", onClick: () => setTableComparisonOpen(true), disabled: !currentProject });
