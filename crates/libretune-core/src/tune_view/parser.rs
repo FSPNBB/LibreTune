@@ -3,6 +3,7 @@
 use super::types::*;
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
+use quick_xml::XmlVersion;
 use std::collections::BTreeMap;
 
 /// Errors that can occur while parsing a `.tuneView` file.
@@ -96,7 +97,7 @@ pub fn parse_tune_view(xml: &str) -> Result<TuneView, TuneViewParseError> {
                 }
             }
             Ok(Event::Text(ref e)) => {
-                let raw = e.unescape().unwrap_or_default();
+                let raw = e.decode().map(|c| c.into_owned()).unwrap_or_default();
                 current_text.push_str(&raw);
             }
             Ok(Event::CData(ref e)) => {
@@ -169,7 +170,7 @@ fn collect_attrs(e: &BytesStart<'_>) -> BTreeMap<String, String> {
     let mut out = BTreeMap::new();
     for attr in e.attributes().flatten() {
         let key = local_name(attr.key.as_ref());
-        if let Ok(val) = attr.unescape_value() {
+        if let Ok(val) = attr.normalized_value(XmlVersion::Implicit1_0) {
             out.insert(key, val.into_owned());
         }
     }

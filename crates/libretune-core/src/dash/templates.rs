@@ -1263,6 +1263,7 @@ fn log_series_attrs(extra: &[LogSeriesEntry]) -> std::collections::BTreeMap<Stri
     attrs
 }
 
+#[allow(clippy::too_many_arguments)]
 fn log_multi_trend(
     id: &str,
     title: &str,

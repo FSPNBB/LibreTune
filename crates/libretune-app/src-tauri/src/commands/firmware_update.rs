@@ -399,10 +399,10 @@ fn classify_firmware_file(path: &Path, method: &str) -> FirmwareUpdateGuidance {
         _ => {}
     }
 
-    if file_name.contains("rusefi.bin") || file_name.ends_with(".bin") && method == "dfu" {
-        if risk_level == "low" {
-            risk_level = "medium";
-        }
+    if (file_name.contains("rusefi.bin") || file_name.ends_with(".bin") && method == "dfu")
+        && risk_level == "low"
+    {
+        risk_level = "medium";
     }
 
     let suggested_file_hint = if method == "openblt" {

@@ -285,9 +285,12 @@ pub async fn import_dash_file(
     })
 }
 
+/// Builder function for a built-in default dashboard template.
+type DefaultDashBuilder = fn() -> dash::DashFile;
+
 /// (file name, builder) pairs for every built-in default dashboard. Adding a
 /// new built-in template only requires appending a row here.
-fn default_dashboard_specs() -> Vec<(&'static str, fn() -> dash::DashFile)> {
+fn default_dashboard_specs() -> Vec<(&'static str, DefaultDashBuilder)> {
     vec![
         ("Basic.ltdash.xml", create_basic_dashboard),
         ("Tuning.ltdash.xml", create_tuning_dashboard),
