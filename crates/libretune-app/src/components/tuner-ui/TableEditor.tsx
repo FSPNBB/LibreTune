@@ -112,7 +112,7 @@ export function TableEditor({
   // Heatmap settings from user preferences
   const { settings: heatmapSettings, getColor: getHeatmapColor } = useHeatmapSettings();
 
-  // Y-axis origin at bottom-left (ECUMaster style) — display-only flip
+  // Y-axis origin at bottom-left — display-only flip
   const yAxisBottom = useTableYAxisBottom();
 
   const heatmapScheme = useMemo(() => {
