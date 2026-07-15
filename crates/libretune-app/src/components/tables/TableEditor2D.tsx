@@ -423,6 +423,14 @@ export default function TableEditor2D({
         handleSetEqual();
         return;
       }
+      // Page keys adjust by an absolute step (1 plain, 5 with Shift/Ctrl),
+      // unlike '>'/'<' which scale by a percentage.
+      if (e.key === 'PageUp' || e.key === 'PageDown') {
+        e.preventDefault();
+        const step = (isShift || isCtrl ? 5 : 1) * (e.key === 'PageUp' ? 1 : -1);
+        handleAdjustBy(step);
+        return;
+      }
       if (matchesAction('table.increase') || ['>', '.', 'q'].includes(e.key)) {
         e.preventDefault();
         handleIncrease(multiplier);
@@ -633,25 +641,27 @@ export default function TableEditor2D({
     handleScale(factor);
   };
 
-  const handleIncrease = (amount: number) => {
-    const values = selectedCellsCoords.map(([x, y]) => {
-      return { x, y, value: localZValues[y][x] };
+  /** Apply a transform to every selected cell in ONE state update.
+   *  Going through handleCellChange per cell loses all but the last cell
+   *  (each call clones the same stale localZValues) and collapses the
+   *  selection to a single cell. */
+  const applyToSelection = (fn: (value: number) => number) => {
+    if (selectedCellsCoords.length === 0) return;
+    const newValues = localZValues.map(row => [...row]);
+    selectedCellsCoords.forEach(([x, y]) => {
+      newValues[y][x] = fn(newValues[y][x]);
     });
-    
-    values.forEach(({ x, y, value }) => {
-      handleCellChange(x, y, value * (1 + amount), { suppressAlert: true });
-    });
+    setLocalZValues(newValues);
+    pushHistory(newValues, localXBins, localYBins);
+    onValuesChange?.(newValues);
   };
 
-  const handleDecrease = (amount: number) => {
-    const values = selectedCellsCoords.map(([x, y]) => {
-      return { x, y, value: localZValues[y][x] };
-    });
-    
-    values.forEach(({ x, y, value }) => {
-      handleCellChange(x, y, value * (1 - amount), { suppressAlert: true });
-    });
-  };
+  /** Add a fixed amount to every selected cell (Page Up/Down) */
+  const handleAdjustBy = (amount: number) => applyToSelection((v) => v + amount);
+
+  const handleIncrease = (amount: number) => applyToSelection((v) => v * (1 + amount));
+
+  const handleDecrease = (amount: number) => applyToSelection((v) => v * (1 - amount));
 
   const handleScale = async (factor: number) => {
     const previousValues = localZValues.map((row) => [...row]);
