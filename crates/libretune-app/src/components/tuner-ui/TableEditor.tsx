@@ -627,14 +627,14 @@ export function TableEditor({
         e.preventDefault();
         adjustValues(-delta * multiplier);
         break;
-      // Page keys use fixed steps: 1 plain, 5 coarse (Shift or Ctrl)
+      // Page keys use fixed steps: 0.1 plain, 1 with Shift, 0.05 with Ctrl
       case 'PageUp':
         e.preventDefault();
-        adjustValues(e.shiftKey || e.ctrlKey ? 5 : 1);
+        adjustValues(e.shiftKey ? 1 : e.ctrlKey ? 0.05 : 0.1);
         break;
       case 'PageDown':
         e.preventDefault();
-        adjustValues(e.shiftKey || e.ctrlKey ? -5 : -1);
+        adjustValues(e.shiftKey ? -1 : e.ctrlKey ? -0.05 : -0.1);
         break;
       case '+':
         e.preventDefault();
