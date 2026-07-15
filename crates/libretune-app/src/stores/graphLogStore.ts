@@ -222,3 +222,64 @@ export const useGraphLogStore = create<GraphLogState>()(
  *  activeTabId no longer exists. */
 export const selectActiveTab = (state: GraphLogState): GraphTab =>
   state.tabs.find((t) => t.id === state.activeTabId) ?? state.tabs[0];
+
+/** Shape of an exported graph-log setup file (logging params travel with it) */
+export interface GraphLogSetupFile {
+  type: 'libretune-graphlog-setup';
+  version: 1;
+  tabs: GraphTab[];
+  timeWindowSec: number;
+  sampleRate?: number;
+}
+
+/** Serialize the current tabs + window into a setup file object. */
+export function exportGraphLogSetup(sampleRate?: number): GraphLogSetupFile {
+  const { tabs, timeWindowSec } = useGraphLogStore.getState();
+  return { type: 'libretune-graphlog-setup', version: 1, tabs, timeWindowSec, sampleRate };
+}
+
+/** Validate and apply an imported setup. Returns an error message, or null on
+ *  success. Slots are rebuilt through the constructors so missing/extra fields
+ *  from hand-edited files can't corrupt the store. */
+export function importGraphLogSetup(raw: unknown): string | null {
+  const data = raw as Partial<GraphLogSetupFile> | null;
+  if (!data || data.type !== 'libretune-graphlog-setup' || !Array.isArray(data.tabs)) {
+    return 'Not a valid graph log setup file';
+  }
+  if (data.tabs.length === 0) return 'Setup file contains no tabs';
+
+  const tabs: GraphTab[] = data.tabs.map((tab, tabIdx) => ({
+    id: newTabId(),
+    name: typeof tab?.name === 'string' && tab.name.trim() ? tab.name : `Graph ${tabIdx + 1}`,
+    panes: Array.from({ length: PANES_PER_TAB }, (_, paneIdx) => {
+      const pane = Array.isArray(tab?.panes) ? tab.panes[paneIdx] : undefined;
+      const rebuild = (side: AxisSide): ChannelSlot => {
+        const slot = pane?.[side];
+        if (!slot || typeof slot.channel !== 'string' || !slot.channel) {
+          return emptySlot(side, paneIdx);
+        }
+        const auto = slot.auto !== false;
+        const min = typeof slot.min === 'number' && isFinite(slot.min) ? slot.min : 0;
+        const max = typeof slot.max === 'number' && isFinite(slot.max) ? slot.max : 100;
+        return auto
+          ? { ...makeSlot(side, paneIdx, slot.channel), min, max, auto: true }
+          : makeSlot(side, paneIdx, slot.channel, min, max);
+      };
+      return {
+        left: rebuild('left'),
+        right: rebuild('right'),
+        hidden: pane?.hidden === true,
+      };
+    }),
+  }));
+
+  useGraphLogStore.setState({
+    tabs,
+    activeTabId: tabs[0].id,
+    timeWindowSec: Math.min(
+      600,
+      Math.max(2, typeof data.timeWindowSec === 'number' ? data.timeWindowSec : 30),
+    ),
+  });
+  return null;
+}

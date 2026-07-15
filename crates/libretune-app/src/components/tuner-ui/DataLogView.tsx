@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { BarChart3, Circle, FolderOpen, Key, Square, CircleDot, Trash2, Save, Pause, Play, LayoutList, LineChart as LineChartIcon } from 'lucide-react';
+import { BarChart3, Circle, FolderOpen, Key, Square, CircleDot, Trash2, Save, Pause, Play, LayoutList, LineChart as LineChartIcon, FileUp, FileDown } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { save, open } from '@tauri-apps/plugin-dialog';
 import { useChannels, useRealtimeStore } from '../../stores/realtimeStore';
-import { useGraphLogStore } from '../../stores/graphLogStore';
+import { useGraphLogStore, exportGraphLogSetup, importGraphLogSetup } from '../../stores/graphLogStore';
 import LoggerStatsPanel from './LoggerStatsPanel';
 import GraphLog, { GraphSample } from './GraphLog';
 import './DataLogView.css';
@@ -407,6 +407,44 @@ export const DataLogView: React.FC = () => {
     }
   }, []);
   
+  const handleExportSetup = useCallback(async () => {
+    try {
+      const path = await save({
+        defaultPath: 'graphlog_setup.json',
+        filters: [{ name: 'Graph Log Setup', extensions: ['json'] }]
+      });
+      if (!path) return;
+      const setup = exportGraphLogSetup(sampleRate);
+      await invoke('write_text_file', { path, contents: JSON.stringify(setup, null, 2) });
+    } catch (err) {
+      console.error('Failed to export setup:', err);
+      alert(`Failed to export setup: ${err}`);
+    }
+  }, [sampleRate]);
+
+  const handleImportSetup = useCallback(async () => {
+    try {
+      const path = await open({
+        filters: [{ name: 'Graph Log Setup', extensions: ['json'] }],
+        multiple: false
+      });
+      if (!path || Array.isArray(path)) return;
+      const text = await invoke<string>('read_text_file', { path });
+      const data = JSON.parse(text);
+      const error = importGraphLogSetup(data);
+      if (error) {
+        alert(error);
+        return;
+      }
+      if (typeof data.sampleRate === 'number' && !isRecording) {
+        setSampleRate(data.sampleRate);
+      }
+    } catch (err) {
+      console.error('Failed to import setup:', err);
+      alert(`Failed to import setup: ${err}`);
+    }
+  }, [isRecording]);
+
   const handleSaveLog = useCallback(async () => {
     try {
       const path = await save({
@@ -730,12 +768,29 @@ export const DataLogView: React.FC = () => {
                 <Save size={14} /> Save
               </button>
               
-              <button 
+              <button
                 className="log-button secondary"
                 onClick={handleLoadLog}
                 disabled={isRecording}
               >
                 <FolderOpen size={14} /> Load
+              </button>
+
+              <button
+                className="log-button secondary"
+                onClick={handleExportSetup}
+                title="Export graph tabs, scales and sample rate to a file"
+              >
+                <FileUp size={14} /> Export
+              </button>
+
+              <button
+                className="log-button secondary"
+                onClick={handleImportSetup}
+                disabled={isRecording}
+                title="Import graph tabs, scales and sample rate from a file"
+              >
+                <FileDown size={14} /> Import
               </button>
             </>
           ) : (
