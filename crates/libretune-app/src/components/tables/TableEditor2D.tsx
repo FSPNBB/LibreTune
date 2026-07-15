@@ -377,8 +377,8 @@ export default function TableEditor2D({
           'table.navigateLeft': ['ArrowLeft'],
           'table.navigateRight': ['ArrowRight'],
           'table.setEqual': ['='],
-          'table.increase': ['>', '.', 'q', 'PageUp'],
-          'table.decrease': ['<', ',', '-', '_', 'PageDown'],
+          'table.increase': ['>', '.', 'q'],
+          'table.decrease': ['<', ',', '-', '_'],
           'table.increaseMultiple': ['+'],
           'table.scale': ['*'],
           'table.interpolate': ['/'],
@@ -421,12 +421,20 @@ export default function TableEditor2D({
         handleSetEqual();
         return;
       }
-      if (matchesAction('table.increase') || ['>', '.', 'q', 'PageUp'].includes(e.key)) {
+      // Page keys adjust by an absolute step (1 plain, 5 with Shift/Ctrl),
+      // unlike '>'/'<' which scale by a percentage.
+      if (e.key === 'PageUp' || e.key === 'PageDown') {
+        e.preventDefault();
+        const step = (isShift || isCtrl ? 5 : 1) * (e.key === 'PageUp' ? 1 : -1);
+        handleAdjustBy(step);
+        return;
+      }
+      if (matchesAction('table.increase') || ['>', '.', 'q'].includes(e.key)) {
         e.preventDefault();
         handleIncrease(multiplier);
         return;
       }
-      if (matchesAction('table.decrease') || ['<', ',', '-', '_', 'PageDown'].includes(e.key)) {
+      if (matchesAction('table.decrease') || ['<', ',', '-', '_'].includes(e.key)) {
         e.preventDefault();
         handleDecrease(multiplier);
         return;
@@ -626,6 +634,13 @@ export default function TableEditor2D({
   const handleContextMenuScale = (factor: number) => {
     setContextMenu({ visible: false, x: 0, y: 0, value: 0 });
     handleScale(factor);
+  };
+
+  /** Add a fixed amount to every selected cell (Page Up/Down) */
+  const handleAdjustBy = (amount: number) => {
+    selectedCellsCoords.forEach(([x, y]) => {
+      handleCellChange(x, y, localZValues[y][x] + amount, { suppressAlert: true });
+    });
   };
 
   const handleIncrease = (amount: number) => {
