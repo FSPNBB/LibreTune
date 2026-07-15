@@ -98,6 +98,19 @@ function lastValue(channel: string | null, visible: GraphSample[]): number | und
   return undefined;
 }
 
+/** Binary search for the sample index nearest to time t */
+function nearestIndex(data: GraphSample[], t: number): number {
+  let lo = 0;
+  let hi = data.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (data[mid].t < t) lo = mid + 1;
+    else hi = mid;
+  }
+  if (lo > 0 && Math.abs(data[lo - 1].t - t) < Math.abs(data[lo].t - t)) return lo - 1;
+  return lo;
+}
+
 interface PaneCanvasProps {
   pane: GraphPane;
   visible: GraphSample[];
@@ -108,6 +121,8 @@ interface PaneCanvasProps {
   cursorPosition?: number | null;
   /** Hovered position 0..1 across the plot area, or null */
   hoverFrac?: number | null;
+  /** Persistent data cursor sample (arrow-key navigable), or null */
+  cursorSample?: GraphSample | null;
   onOpenConfig: () => void;
 }
 
@@ -120,6 +135,7 @@ const PaneCanvas: React.FC<PaneCanvasProps> = ({
   height,
   cursorPosition,
   hoverFrac = null,
+  cursorSample = null,
   onOpenConfig,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -308,23 +324,13 @@ const PaneCanvas: React.FC<PaneCanvasProps> = ({
       ctx.stroke();
     }
 
-    // Hover cursor: vertical bar snapped to the nearest sample, with the
-    // value of each channel at that moment
-    if (hoverFrac !== null && visible.length > 0) {
-      const tHover = windowEnd - windowMs * (1 - hoverFrac);
-      let nearest = visible[0];
-      let bestDist = Math.abs(nearest.t - tHover);
-      for (const s of visible) {
-        const d = Math.abs(s.t - tHover);
-        if (d < bestDist) {
-          bestDist = d;
-          nearest = s;
-        }
-      }
-      const x = padL + plotW * (1 - (windowEnd - nearest.t) / windowMs);
+    // Vertical marker at a sample with dots and value labels for both slots.
+    const drawSampleMarker = (sample: GraphSample, lineStyle: string, lineW: number) => {
+      const x = padL + plotW * (1 - (windowEnd - sample.t) / windowMs);
+      if (x < padL - 1 || x > padL + plotW + 1) return;
 
-      ctx.strokeStyle = 'rgba(220,225,235,0.75)';
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = lineStyle;
+      ctx.lineWidth = lineW;
       ctx.beginPath();
       ctx.moveTo(x, padT);
       ctx.lineTo(x, padT + plotH);
@@ -333,7 +339,7 @@ const PaneCanvas: React.FC<PaneCanvasProps> = ({
       for (const side of sides) {
         const slot = pane[side];
         if (!slot.channel) continue;
-        const v = nearest.values[slot.channel];
+        const v = sample.values[slot.channel];
         if (v === undefined) continue;
         const { min, max } = slotBounds(slot, visible);
         const range = max - min || 1;
@@ -359,8 +365,20 @@ const PaneCanvas: React.FC<PaneCanvasProps> = ({
         ctx.textBaseline = 'top';
         ctx.fillText(text, tx, ty);
       }
+    };
+
+    // Persistent data cursor (arrow-key navigable)
+    if (cursorSample) {
+      drawSampleMarker(cursorSample, 'rgba(79,143,232,0.95)', 1.5);
     }
-  }, [pane, visible, windowMs, windowEnd, width, height, cursorPosition, hoverFrac]);
+
+    // Hover cursor: vertical bar snapped to the nearest sample
+    if (hoverFrac !== null && visible.length > 0) {
+      const tHover = windowEnd - windowMs * (1 - hoverFrac);
+      const nearest = visible[nearestIndex(visible, tHover)];
+      drawSampleMarker(nearest, 'rgba(220,225,235,0.6)', 1);
+    }
+  }, [pane, visible, windowMs, windowEnd, width, height, cursorPosition, hoverFrac, cursorSample]);
 
   return (
     <div className="graphlog-pane" style={{ height }}>
@@ -458,14 +476,18 @@ export const GraphLog: React.FC<GraphLogProps> = ({
   const [hoverFrac, setHoverFrac] = useState<number | null>(null);
   /** Right edge of the view in log time; null = follow the latest sample */
   const [viewEnd, setViewEnd] = useState<number | null>(null);
+  /** Persistent data cursor position in log time; arrow keys step it */
+  const [cursorT, setCursorT] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Refs so the zoom handlers (bound once for hotkeys) see current values
   const hoverFracRef = useRef<number | null>(null);
   const viewEndRef = useRef<number | null>(null);
+  const cursorTRef = useRef<number | null>(null);
   const samplesRef = useRef<GraphSample[]>(samples);
   hoverFracRef.current = hoverFrac;
   viewEndRef.current = viewEnd;
+  cursorTRef.current = cursorT;
   samplesRef.current = samples;
 
   /** Zoom keeping the time under the hover cursor fixed; anchors the right
@@ -491,7 +513,30 @@ export const GraphLog: React.FC<GraphLogProps> = ({
   const zoomIn = useCallback(() => zoomBy(ZOOM_FACTOR), [zoomBy]);
   const zoomOut = useCallback(() => zoomBy(1 / ZOOM_FACTOR), [zoomBy]);
 
-  // Q = zoom in, A = zoom out (ignored while typing in a form field)
+  /** Step the data cursor by n samples, panning the view to keep it visible */
+  const stepCursor = useCallback((delta: number) => {
+    const data = samplesRef.current;
+    if (data.length === 0) return;
+    const cur = cursorTRef.current;
+    let idx = cur === null ? data.length - 1 : nearestIndex(data, cur);
+    if (cur !== null) idx += delta;
+    idx = Math.min(data.length - 1, Math.max(0, idx));
+    const t = data[idx].t;
+    setCursorT(t);
+
+    // Keep the cursor inside the view: nudge the window edge past it
+    const winMs = useGraphLogStore.getState().timeWindowSec * 1000;
+    const lastT = data[data.length - 1].t;
+    const end = viewEndRef.current ?? lastT;
+    if (t > end) {
+      setViewEnd(t >= lastT ? null : t);
+    } else if (t < end - winMs) {
+      setViewEnd(Math.min(t + winMs, lastT));
+    }
+  }, []);
+
+  // Q = zoom in, A = zoom out, arrows = step data cursor, Esc = clear cursor
+  // (all ignored while typing in a form field)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName;
@@ -501,11 +546,31 @@ export const GraphLog: React.FC<GraphLogProps> = ({
         zoomIn();
       } else if (e.key === 'a' || e.key === 'A') {
         zoomOut();
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        const step = (e.shiftKey ? 10 : 1) * (e.key === 'ArrowLeft' ? -1 : 1);
+        stepCursor(step);
+      } else if (e.key === 'Escape') {
+        setCursorT(null);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [zoomIn, zoomOut]);
+  }, [zoomIn, zoomOut, stepCursor]);
+
+  /** Click on the graphs places the data cursor at the nearest sample */
+  const handlePanesClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const data = samplesRef.current;
+    if (data.length === 0) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const frac = (e.clientX - rect.left - PAD_L) / Math.max(1, rect.width - PAD_L - PAD_R);
+    if (frac < 0 || frac > 1) return;
+    const winMs = useGraphLogStore.getState().timeWindowSec * 1000;
+    const lastT = data[data.length - 1].t;
+    const end = viewEndRef.current ?? lastT;
+    const t = end - winMs * (1 - frac);
+    setCursorT(data[nearestIndex(data, t)].t);
+  }, []);
 
   const handlePanesMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -537,6 +602,11 @@ export const GraphLog: React.FC<GraphLogProps> = ({
     while (endIdx > startIdx && samples[endIdx - 1].t > windowEnd) endIdx--;
     return samples.slice(startIdx, endIdx);
   }, [samples, windowStart, windowEnd]);
+
+  const cursorSample = useMemo(
+    () => (cursorT !== null && samples.length > 0 ? samples[nearestIndex(samples, cursorT)] : null),
+    [cursorT, samples],
+  );
 
   const visiblePanes = activeTab.panes.filter((p) => !p.hidden);
   const timeAxisHeight = 22;
@@ -610,6 +680,11 @@ export const GraphLog: React.FC<GraphLogProps> = ({
           <Plus size={13} />
         </button>
         <div className="graphlog-window-select">
+          {cursorSample && samples.length > 0 && (
+            <span className="graphlog-cursor-time" title="Data cursor (←/→ to step, Esc to clear)">
+              ▸ {formatClock(cursorSample.t - samples[0].t)}
+            </span>
+          )}
           {!isFollowing && (
             <button
               type="button"
@@ -634,6 +709,7 @@ export const GraphLog: React.FC<GraphLogProps> = ({
         className="graphlog-panes"
         onMouseMove={handlePanesMouseMove}
         onMouseLeave={() => setHoverFrac(null)}
+        onClick={handlePanesClick}
       >
         {samples.length === 0 && (
           <div className="graphlog-empty-hint">Press Record to start logging</div>
@@ -651,6 +727,7 @@ export const GraphLog: React.FC<GraphLogProps> = ({
               height={paneHeight}
               cursorPosition={cursorPosition}
               hoverFrac={hoverFrac}
+              cursorSample={cursorSample}
               onOpenConfig={() => setConfigPane(paneIndex)}
             />
           );
