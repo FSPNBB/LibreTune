@@ -77,7 +77,7 @@ use commands::dash_layout::{
 };
 use commands::data_logging::{
     clear_log, get_log_entries, get_logging_status, read_text_file, save_log, start_logging,
-    stop_logging,
+    stop_logging, write_text_file,
 };
 use commands::debug_realtime::debug_single_realtime_read;
 use commands::demo::{get_demo_mode, set_demo_mode};
@@ -339,6 +339,7 @@ pub fn run() {
             clear_log,
             save_log,
             read_text_file,
+            write_text_file,
             // Diagnostic commands (stubs)
             start_tooth_logger,
             stop_tooth_logger,
