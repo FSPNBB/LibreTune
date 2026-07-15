@@ -4,7 +4,7 @@
  * Mirrors the AFR table's values converted to lambda for a selectable fuel
  * blend (E0…E100). Purely a viewing aid: no editing, no effect on the tune.
  */
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useChannels } from '../../stores/realtimeStore';
 import './LambdaPreviewTable.css';
 
@@ -39,7 +39,7 @@ function LiveLambdaAfrGauges() {
         </span>
       </div>
       <div className="lambda-preview-gauge" title="Ethanol blend derived from AFR ÷ λ (effective stoich ratio)">
-        <span className="lambda-preview-gauge-label">Fuel</span>
+        <span className="lambda-preview-gauge-label">calculated fuel</span>
         <span className="lambda-preview-gauge-value">{fuelBlend}</span>
       </div>
     </div>
@@ -77,6 +77,21 @@ export default function LambdaPreviewTable({
   );
   const fuel = FUEL_STOICH.find((f) => f.id === fuelId) ?? FUEL_STOICH[0];
 
+  // Pin the panel's height to the main table grid so both read as one unit.
+  const panelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const panel = panelRef.current;
+    const mainGrid = panel?.parentElement?.querySelector('.table-grid-container');
+    if (!panel || !mainGrid) return;
+    const sync = () => {
+      panel.style.height = `${(mainGrid as HTMLElement).offsetHeight}px`;
+    };
+    sync();
+    const observer = new ResizeObserver(sync);
+    observer.observe(mainGrid);
+    return () => observer.disconnect();
+  }, []);
+
   const rowOrder = useMemo(() => {
     const order = zValues.map((_, i) => i);
     return yAxisBottom ? order.reverse() : order;
@@ -92,7 +107,7 @@ export default function LambdaPreviewTable({
   };
 
   return (
-    <div className="lambda-preview">
+    <div className="lambda-preview" ref={panelRef}>
       <div className="lambda-preview-header">
         <span className="lambda-preview-title">λ view</span>
         <LiveLambdaAfrGauges />
