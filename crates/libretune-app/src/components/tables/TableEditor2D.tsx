@@ -636,32 +636,27 @@ export default function TableEditor2D({
     handleScale(factor);
   };
 
-  /** Add a fixed amount to every selected cell (Page Up/Down) */
-  const handleAdjustBy = (amount: number) => {
+  /** Apply a transform to every selected cell in ONE state update.
+   *  Going through handleCellChange per cell loses all but the last cell
+   *  (each call clones the same stale localZValues) and collapses the
+   *  selection to a single cell. */
+  const applyToSelection = (fn: (value: number) => number) => {
+    if (selectedCellsCoords.length === 0) return;
+    const newValues = localZValues.map(row => [...row]);
     selectedCellsCoords.forEach(([x, y]) => {
-      handleCellChange(x, y, localZValues[y][x] + amount, { suppressAlert: true });
+      newValues[y][x] = fn(newValues[y][x]);
     });
+    setLocalZValues(newValues);
+    pushHistory(newValues, localXBins, localYBins);
+    onValuesChange?.(newValues);
   };
 
-  const handleIncrease = (amount: number) => {
-    const values = selectedCellsCoords.map(([x, y]) => {
-      return { x, y, value: localZValues[y][x] };
-    });
-    
-    values.forEach(({ x, y, value }) => {
-      handleCellChange(x, y, value * (1 + amount), { suppressAlert: true });
-    });
-  };
+  /** Add a fixed amount to every selected cell (Page Up/Down) */
+  const handleAdjustBy = (amount: number) => applyToSelection((v) => v + amount);
 
-  const handleDecrease = (amount: number) => {
-    const values = selectedCellsCoords.map(([x, y]) => {
-      return { x, y, value: localZValues[y][x] };
-    });
-    
-    values.forEach(({ x, y, value }) => {
-      handleCellChange(x, y, value * (1 - amount), { suppressAlert: true });
-    });
-  };
+  const handleIncrease = (amount: number) => applyToSelection((v) => v * (1 + amount));
+
+  const handleDecrease = (amount: number) => applyToSelection((v) => v * (1 - amount));
 
   const handleScale = async (factor: number) => {
     const previousValues = localZValues.map((row) => [...row]);
