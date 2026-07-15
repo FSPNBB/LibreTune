@@ -423,12 +423,12 @@ export default function TableEditor2D({
         handleSetEqual();
         return;
       }
-      // Page keys adjust by an absolute step (1 plain, 5 with Shift/Ctrl),
-      // unlike '>'/'<' which scale by a percentage.
+      // Page keys adjust by an absolute step (0.1 plain, 1 with Shift,
+      // 0.05 with Ctrl), unlike '>'/'<' which scale by a percentage.
       if (e.key === 'PageUp' || e.key === 'PageDown') {
         e.preventDefault();
-        const step = (isShift || isCtrl ? 5 : 1) * (e.key === 'PageUp' ? 1 : -1);
-        handleAdjustBy(step);
+        const magnitude = isShift ? 1 : isCtrl ? 0.05 : 0.1;
+        handleAdjustBy(magnitude * (e.key === 'PageUp' ? 1 : -1));
         return;
       }
       if (matchesAction('table.increase') || ['>', '.', 'q'].includes(e.key)) {
