@@ -24,6 +24,8 @@ interface TableGridProps {
   liveCursorX?: number; // Current X-axis value (e.g., RPM)
   liveCursorY?: number; // Current Y-axis value (e.g., MAP/TPS)
   showLiveCursor?: boolean;
+  /** Render rows bottom-up so the origin is at the bottom-left (display only) */
+  yAxisBottom?: boolean;
   // Heatmap color props
   showColorShade?: boolean; // Whether to show heatmap colors
   heatmapScheme?: HeatmapScheme | string[]; // Scheme name or custom color stops
@@ -50,6 +52,7 @@ export default function TableGrid({
   showColorShade = true,
   heatmapScheme = 'tunerstudio',
   compact = false,
+  yAxisBottom = false,
 }: TableGridProps) {
   const gridRef = useRef<HTMLDivElement>(null);
   const [editingCell, setEditingCell] = useState<[number, number] | null>(null);
@@ -347,8 +350,10 @@ export default function TableGrid({
         );
       })}
 
-      {/* Data rows: each row = y-axis label + data cells */}
-      {z_values.map((row, y) => {
+      {/* Data rows: each row = y-axis label + data cells.
+          Display order only — all coordinates stay in data space. */}
+      {(yAxisBottom ? [...z_values.keys()].reverse() : [...z_values.keys()]).map((y) => {
+        const row = z_values[y];
         const isEditingYAxis = editingAxis?.axis === 'y' && editingAxis.index === y;
         const isYHeaderSelected = selectionRange && 
           y >= Math.min(selectionRange.start[1], selectionRange.end[1]) && 
@@ -444,7 +449,7 @@ export default function TableGrid({
           className="live-cursor-overlay"
           style={{
             '--cursor-x': liveCursorPosition.x,
-            '--cursor-y': liveCursorPosition.y,
+            '--cursor-y': yAxisBottom ? y_size - 1 - liveCursorPosition.y : liveCursorPosition.y,
             '--cols': x_size,
             '--rows': y_size,
           } as React.CSSProperties}

@@ -8,6 +8,7 @@ import TableContextMenu from './TableContextMenu';
 import RebinDialog from '../dialogs/RebinDialog';
 import CellEditDialog from '../dialogs/CellEditDialog';
 import { useHeatmapSettings } from '../../utils/useHeatmapSettings';
+import { useTableYAxisBottom } from '../../utils/useTableOrientation';
 import { useChannels } from '../../stores/realtimeStore';
 import { useToast } from '../../contexts/ToastContext';
 import { getHotkeyManager } from '../../services/hotkeyService';
@@ -201,6 +202,7 @@ export default function TableEditor2D({
   
   // Get heatmap scheme from user settings
   const { settings: heatmapSettings } = useHeatmapSettings();
+  const yAxisBottom = useTableYAxisBottom();
 
   const selectedCellsCoords = useMemo(() => {
     if (!selectionRange) return [];
@@ -528,12 +530,15 @@ export default function TableEditor2D({
     let newX = currentX;
     let newY = currentY;
 
+    // With the bottom-left origin, visually "up" is the next data row
+    const upDelta = yAxisBottom ? 1 : -1;
+
     switch (key) {
       case 'ArrowUp':
-        newY = Math.max(0, currentY - 1);
+        newY = Math.min(y_bins.length - 1, Math.max(0, currentY + upDelta));
         break;
       case 'ArrowDown':
-        newY = Math.min(y_bins.length - 1, currentY + 1);
+        newY = Math.min(y_bins.length - 1, Math.max(0, currentY - upDelta));
         break;
       case 'ArrowLeft':
         newX = Math.max(0, currentX - 1);
@@ -1186,6 +1191,7 @@ export default function TableEditor2D({
           showColorShade={showColorShade}
           heatmapScheme={heatmapSettings.valueScheme}
           compact={embedded}
+          yAxisBottom={yAxisBottom}
         />
         {hasEmbeddedTableLiveReadout(table_name, x_output_channel, y_output_channel) && (
           <TableLiveReadout
