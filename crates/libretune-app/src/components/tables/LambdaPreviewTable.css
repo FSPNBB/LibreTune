@@ -1,10 +1,10 @@
 .lambda-preview {
   flex: 0 0 auto;
-  max-width: 40%;
+  max-width: 48%;
   overflow: auto;
   border: 1px solid var(--border-color, rgba(128, 140, 160, 0.25));
   border-radius: 6px;
-  padding: 6px;
+  padding: 10px;
   background: var(--bg-secondary, #1a2030);
   align-self: flex-start;
 }
@@ -36,7 +36,7 @@
   display: grid;
   gap: 1px;
   font-family: monospace;
-  font-size: 10px;
+  font-size: 13px;
 }
 
 .lambda-preview-corner {
@@ -44,7 +44,7 @@
 }
 
 .lambda-preview-axis {
-  padding: 2px 4px;
+  padding: 3px 6px;
   text-align: right;
   color: var(--text-secondary, #9aa4b8);
   font-weight: 600;
@@ -52,9 +52,40 @@
 }
 
 .lambda-preview-cell {
-  padding: 2px 4px;
+  padding: 3px 6px;
   text-align: right;
   color: var(--text-primary, #e6eaf2);
   background: var(--bg-primary, #10141f);
   white-space: nowrap;
+}
+
+/* ---- Live gauges ---- */
+.lambda-preview-gauges {
+  display: flex;
+  gap: 10px;
+  margin: 0 auto;
+}
+
+.lambda-preview-gauge {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--border-color, rgba(128, 140, 160, 0.25));
+  border-radius: 5px;
+  background: var(--bg-primary, #10141f);
+}
+
+.lambda-preview-gauge-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary, #9aa4b8);
+}
+
+.lambda-preview-gauge-value {
+  font-family: monospace;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent-color, #4f8fe8);
+  font-variant-numeric: tabular-nums;
 }

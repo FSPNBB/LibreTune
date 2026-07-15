@@ -5,7 +5,33 @@
  * blend (E0…E100). Purely a viewing aid: no editing, no effect on the tune.
  */
 import { Fragment, useMemo, useState } from 'react';
+import { useChannels } from '../../stores/realtimeStore';
 import './LambdaPreviewTable.css';
+
+/** Live λ and AFR readouts, isolated so realtime updates only re-render
+ *  the gauges and not the whole preview grid. */
+function LiveLambdaAfrGauges() {
+  const values = useChannels(['lambda', 'afr']);
+  const lambda = values['lambda'];
+  const afr = values['afr'];
+
+  return (
+    <div className="lambda-preview-gauges">
+      <div className="lambda-preview-gauge">
+        <span className="lambda-preview-gauge-label">λ</span>
+        <span className="lambda-preview-gauge-value">
+          {lambda !== undefined ? lambda.toFixed(2) : '—'}
+        </span>
+      </div>
+      <div className="lambda-preview-gauge">
+        <span className="lambda-preview-gauge-label">AFR</span>
+        <span className="lambda-preview-gauge-value">
+          {afr !== undefined ? afr.toFixed(1) : '—'}
+        </span>
+      </div>
+    </div>
+  );
+}
 
 /** Stoichiometric AFR per ethanol blend (linear gasoline/ethanol mix) */
 const FUEL_STOICH: Array<{ id: string; label: string; stoich: number }> = [
@@ -56,6 +82,7 @@ export default function LambdaPreviewTable({
     <div className="lambda-preview">
       <div className="lambda-preview-header">
         <span className="lambda-preview-title">λ view</span>
+        <LiveLambdaAfrGauges />
         <select
           value={fuel.id}
           onChange={(e) => handleFuelChange(e.target.value)}
