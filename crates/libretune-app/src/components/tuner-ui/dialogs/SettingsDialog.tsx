@@ -567,7 +567,7 @@ export function SettingsDialog({ isOpen, onClose, theme, onThemeChange, onSettin
               />
               Table Y axis zero at bottom
             </label>
-            <span className="dialog-form-note">Show the lowest load row at the bottom of tables (ECUMaster style)</span>
+            <span className="dialog-form-note">Show the lowest load row at the bottom of tables</span>
           </div>
 
           <FormField

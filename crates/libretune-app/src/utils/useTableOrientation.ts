@@ -2,8 +2,8 @@
  * Table Y-axis orientation setting.
  *
  * When enabled (Settings → "Table Y axis zero at bottom"), table editors
- * render rows so the origin sits at the bottom-left like ECUMaster — the
- * lowest load row at the bottom, increasing upward. Display-only: data
+ * render rows so the origin sits at the bottom-left — the lowest load row
+ * at the bottom, increasing upward. Display-only: data
  * coordinates, selection, and clipboard behavior are unchanged.
  */
 import { useEffect, useState } from 'react';
