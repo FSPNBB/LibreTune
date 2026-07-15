@@ -608,15 +608,22 @@ export function TableEditor({
         break;
       case '>':
       case '.':
-      case 'PageUp':
         e.preventDefault();
         adjustValues(delta * multiplier);
         break;
       case '<':
       case ',':
-      case 'PageDown':
         e.preventDefault();
         adjustValues(-delta * multiplier);
+        break;
+      // Page keys use fixed steps: 1 plain, 5 coarse (Shift or Ctrl)
+      case 'PageUp':
+        e.preventDefault();
+        adjustValues(e.shiftKey || e.ctrlKey ? 5 : 1);
+        break;
+      case 'PageDown':
+        e.preventDefault();
+        adjustValues(e.shiftKey || e.ctrlKey ? -5 : -1);
         break;
       case '+':
         e.preventDefault();
