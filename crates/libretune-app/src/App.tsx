@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
@@ -1008,6 +1008,18 @@ function AppContent() {
     }
   }
 
+  // Refresh open views whenever the backend loads a tune (any entry point)
+  const refreshOpenTabsRef = useRef<() => Promise<void>>(async () => {});
+  refreshOpenTabsRef.current = refreshOpenTabs;
+  useEffect(() => {
+    if (!isTauri) return;
+    let unlisten: (() => void) | null = null;
+    listen("tune:loaded", () => { refreshOpenTabsRef.current(); })
+      .then((un) => { unlisten = un; })
+      .catch(() => {});
+    return () => { if (unlisten) unlisten(); };
+  }, []);
+
   /** Re-fetch open table/curve tabs so they reflect the current tune */
   async function refreshOpenTabs() {
     const updated = { ...tabContents };
@@ -1036,10 +1048,9 @@ function AppContent() {
     try {
       showLoading("Loading tune file...");
       await invoke("load_tune", { path: tunePath });
-      // Refresh constants and open views so the UI reflects the loaded tune
+      // Refresh constants so the UI reflects the loaded tune
+      // (open views refresh via the backend's tune:loaded event)
       await fetchConstants();
-      await refreshOpenTabs();
-      window.dispatchEvent(new Event("lt:tune-loaded"));
       showToast("Tune file loaded successfully", "success");
     } catch (e) {
       showToast("Failed to load tune: " + e, "error");
