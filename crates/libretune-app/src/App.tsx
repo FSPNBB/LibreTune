@@ -1008,14 +1008,38 @@ function AppContent() {
     }
   }
 
+  /** Re-fetch open table/curve tabs so they reflect the current tune */
+  async function refreshOpenTabs() {
+    const updated = { ...tabContents };
+    let changed = false;
+    for (const [id, content] of Object.entries(tabContents)) {
+      try {
+        if (content.type === "table") {
+          const data = await invoke<BackendTableData>("get_table_data", { tableName: id });
+          updated[id] = { type: "table", data: toTunerTableData(data) };
+          changed = true;
+        } else if (content.type === "curve") {
+          const data = await invoke<BackendCurveData>("get_curve_data", { curveName: id });
+          updated[id] = { ...content, data: toCurveData(data) };
+          changed = true;
+        }
+      } catch {
+        // keep the tab's previous data
+      }
+    }
+    if (changed) setTabContents(updated);
+  }
+
   /** Import an existing tune file (.msq) into the currently open project */
   async function handleImportTuneIntoProject(tunePath: string) {
     if (!currentProject) return;
     try {
       showLoading("Loading tune file...");
       await invoke("load_tune", { path: tunePath });
-      // Refresh constants so UI reflects the loaded tune
+      // Refresh constants and open views so the UI reflects the loaded tune
       await fetchConstants();
+      await refreshOpenTabs();
+      window.dispatchEvent(new Event("lt:tune-loaded"));
       showToast("Tune file loaded successfully", "success");
     } catch (e) {
       showToast("Failed to load tune: " + e, "error");
