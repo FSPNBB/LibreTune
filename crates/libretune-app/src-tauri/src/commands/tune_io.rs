@@ -89,9 +89,18 @@ pub async fn resolve_controller_command(
     state: &AppState,
     command_name: &str,
 ) -> Result<Vec<u8>, String> {
+    // Current PcVariable values (dialog dropdowns) live in the tune cache,
+    // not in the definition's parse-time defaults
+    let mut current = std::collections::HashMap::new();
+    if let Some(cache) = state.tune_cache.lock().await.as_ref() {
+        for (name, value) in &cache.local_values {
+            current.insert(name.clone(), *value as u8);
+        }
+    }
+
     let def_guard = state.definition.lock().await;
     let def = def_guard.as_ref().ok_or("No INI definition loaded")?;
-    resolve_command_bytes(def, command_name, &mut std::collections::HashSet::new())
+    resolve_command_bytes(def, command_name, &current, &mut std::collections::HashSet::new())
 }
 
 /// Send pre-resolved controller command bytes to the connected ECU.
@@ -106,6 +115,7 @@ pub async fn send_controller_command_bytes(state: &AppState, bytes: &[u8]) -> Re
 fn resolve_command_bytes(
     def: &EcuDefinition,
     command_name: &str,
+    current_values: &std::collections::HashMap<String, u8>,
     visited: &mut std::collections::HashSet<String>,
 ) -> Result<Vec<u8>, String> {
     // Prevent infinite recursion
@@ -128,12 +138,12 @@ fn resolve_command_bytes(
         match part {
             CommandPart::Raw(raw_str) => {
                 // Parse hex escapes and variable substitution
-                let bytes = parse_command_string(def, raw_str)?;
+                let bytes = parse_command_string(def, raw_str, current_values)?;
                 result.extend(bytes);
             }
             CommandPart::Reference(ref_name) => {
                 // Recursively resolve referenced command
-                let ref_bytes = resolve_command_bytes(def, ref_name, visited)?;
+                let ref_bytes = resolve_command_bytes(def, ref_name, current_values, visited)?;
                 result.extend(ref_bytes);
             }
         }
@@ -143,7 +153,11 @@ fn resolve_command_bytes(
 }
 
 /// Parse a command string with hex escapes (\x00) and variable substitution ($tsCanId)
-fn parse_command_string(def: &EcuDefinition, s: &str) -> Result<Vec<u8>, String> {
+fn parse_command_string(
+    def: &EcuDefinition,
+    s: &str,
+    current_values: &std::collections::HashMap<String, u8>,
+) -> Result<Vec<u8>, String> {
     let mut result = Vec::new();
     let mut chars = s.chars().peekable();
 
@@ -185,13 +199,14 @@ fn parse_command_string(def: &EcuDefinition, s: &str) -> Result<Vec<u8>, String>
                 }
             }
 
-            // Look up variable value
-            if let Some(&value) = def.pc_variables.get(&var_name) {
-                result.push(value);
-            } else {
-                // Variable not found - push 0 as default
-                result.push(0);
-            }
+            // Same lookup chain the UI uses: edited value, INI default, legacy map
+            let value = current_values
+                .get(&var_name)
+                .copied()
+                .or_else(|| def.default_values.get(&var_name).map(|v| *v as u8))
+                .or_else(|| def.pc_variables.get(&var_name).copied())
+                .unwrap_or(0);
+            result.push(value);
         } else {
             result.push(ch as u8);
         }
