@@ -12,6 +12,7 @@
 /** Available heatmap color scheme presets */
 export type HeatmapScheme =
   | 'tunerstudio'  // Classic: Blue → Cyan → Green → Yellow → Orange → Red
+  | 'pastel'       // Soft: Green → Yellow → Orange → Red, low saturation
   | 'thermal'      // Black → Purple → Red → Orange → Yellow → White
   | 'viridis'      // Colorblind-safe: Purple → Blue → Teal → Green → Yellow
   | 'plasma'       // Colorblind-safe: Purple → Pink → Orange → Yellow
@@ -55,6 +56,18 @@ export const HEATMAP_SCHEMES: Record<Exclude<HeatmapScheme, 'custom'>, HeatmapSc
       '#FFFF00', // Yellow
       '#FF8000', // Orange
       '#FF0000', // Red (hot/high)
+    ],
+  },
+  pastel: {
+    name: 'Pastel',
+    description: 'Soft green-to-red gradient, easy on the eyes',
+    colorblindSafe: false,
+    stops: [
+      '#66c96d', // soft green (low)
+      '#a9d94f',
+      '#e8e14b', // soft yellow
+      '#f0a944', // soft orange
+      '#e96c6c', // soft red (high)
     ],
   },
   thermal: {
@@ -294,6 +307,7 @@ export function getSchemeDefinition(scheme: HeatmapScheme): HeatmapSchemeDefinit
 export function getAvailableSchemes(): Array<{ id: HeatmapScheme; name: string; colorblindSafe: boolean }> {
   return [
     { id: 'tunerstudio', name: 'TunerStudio Classic', colorblindSafe: false },
+    { id: 'pastel', name: 'Pastel', colorblindSafe: false },
     { id: 'thermal', name: 'Thermal', colorblindSafe: false },
     { id: 'viridis', name: 'Viridis', colorblindSafe: true },
     { id: 'plasma', name: 'Plasma', colorblindSafe: true },

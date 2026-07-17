@@ -83,6 +83,8 @@ pub async fn update_setting(
         "table_y_axis_bottom" => {
             settings.table_y_axis_bottom = value.parse().map_err(|_| "Invalid boolean value")?
         }
+        "table_cursor_color" => settings.table_cursor_color = value,
+        "table_trail_color" => settings.table_trail_color = value,
         // Session persistence
         "last_project_path" => {
             settings.last_project_path = if value.is_empty() { None } else { Some(value) }

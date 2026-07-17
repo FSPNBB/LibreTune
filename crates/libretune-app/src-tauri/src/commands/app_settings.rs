@@ -37,6 +37,14 @@ pub(crate) struct Settings {
     #[serde(default)]
     pub(crate) table_y_axis_bottom: bool,
 
+    /// Custom color for the live cursor marker (empty = theme default)
+    #[serde(default)]
+    pub(crate) table_cursor_color: String,
+
+    /// Custom color for the operating-point trail (empty = default blue)
+    #[serde(default)]
+    pub(crate) table_trail_color: String,
+
     // Heatmap color scheme settings
     #[serde(default = "default_heatmap_scheme")]
     pub(crate) heatmap_value_scheme: String, // Scheme for VE/timing tables

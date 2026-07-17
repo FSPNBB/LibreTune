@@ -52,6 +52,8 @@ export function SettingsDialog({ isOpen, onClose, theme, onThemeChange, onSettin
   const [autoBurnOnClose, setAutoBurnOnClose] = useState(false);
   const [demoMode, setDemoMode] = useState(false);
   const [tableYAxisBottom, setTableYAxisBottom] = useState(false);
+  const [tableCursorColor, setTableCursorColor] = useState('');
+  const [tableTrailColor, setTableTrailColor] = useState('');
   const [demoLoading, setDemoLoading] = useState(false);
   const [indicatorColumnCount, setIndicatorColumnCount] = useState('auto');
   const [indicatorFillEmpty, setIndicatorFillEmpty] = useState(false);
@@ -127,6 +129,8 @@ export function SettingsDialog({ isOpen, onClose, theme, onThemeChange, onSettin
         }
         if (settings.auto_burn_on_close !== undefined) setAutoBurnOnClose(!!settings.auto_burn_on_close);
         if (settings.table_y_axis_bottom !== undefined) setTableYAxisBottom(!!settings.table_y_axis_bottom);
+        if (settings.table_cursor_color) setTableCursorColor(settings.table_cursor_color);
+        if (settings.table_trail_color) setTableTrailColor(settings.table_trail_color);
         if (settings.indicator_column_count !== undefined) setIndicatorColumnCount(settings.indicator_column_count);
         if (settings.indicator_fill_empty !== undefined) setIndicatorFillEmpty(!!settings.indicator_fill_empty);
         if (settings.indicator_text_fit !== undefined) setIndicatorTextFit(settings.indicator_text_fit);
@@ -568,6 +572,31 @@ export function SettingsDialog({ isOpen, onClose, theme, onThemeChange, onSettin
               Table Y axis zero at bottom
             </label>
             <span className="dialog-form-note">Show the lowest load row at the bottom of tables</span>
+          </div>
+
+          <div className="dialog-form-group">
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input
+                type="color"
+                value={tableCursorColor || '#00ff00'}
+                onChange={(e) => {
+                  setTableCursorColor(e.target.value);
+                  invoke('update_setting', { key: 'table_cursor_color', value: e.target.value }).catch(() => {});
+                }}
+              />
+              Live cursor color
+              <input
+                type="color"
+                value={tableTrailColor || '#4A90E2'}
+                onChange={(e) => {
+                  setTableTrailColor(e.target.value);
+                  invoke('update_setting', { key: 'table_trail_color', value: e.target.value }).catch(() => {});
+                }}
+                style={{ marginLeft: 16 }}
+              />
+              Trail color
+            </label>
+            <span className="dialog-form-note">Colors of the operating-point marker and its trace on tables</span>
           </div>
 
           <FormField

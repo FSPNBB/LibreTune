@@ -298,12 +298,12 @@ export default function TableGrid({
         <polyline
           points={centers.map((c) => `${c.cx},${c.cy}`).join(' ')}
           fill="none"
-          stroke="#4A90E2"
+          style={{ stroke: 'var(--cursor-trail, #4A90E2)' }}
           strokeWidth="2"
           strokeOpacity="0.7"
         />
         {centers.map((c, i) => (
-          <circle key={i} cx={c.cx} cy={c.cy} r="3" fill="#4A90E2" fillOpacity="0.8" />
+          <circle key={i} cx={c.cx} cy={c.cy} r="3" style={{ fill: 'var(--cursor-trail, #4A90E2)' }} fillOpacity="0.8" />
         ))}
       </svg>
     );
