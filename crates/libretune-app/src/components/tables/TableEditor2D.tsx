@@ -151,7 +151,7 @@ export default function TableEditor2D({
   
   const [selectionRange, setSelectionRange] = useState<SelectionRange | null>(null);
   const [lockedCells, setLockedCells] = useState<Set<string>>(new Set());
-  const [historyTrail, setHistoryTrail] = useState<[number, number][]>([]);
+  const [historyTrail, setHistoryTrail] = useState<[number, number, number][]>([]);
   const [showColorShade, setShowColorShade] = useState(true);
   const [showHistoryTrail, setShowHistoryTrail] = useState(true);
   const [show3D, setShow3D] = useState(false);
@@ -357,16 +357,21 @@ export default function TableEditor2D({
       });
       return best;
     };
+    const TRAIL_TTL_MS = 8000;
     const interval = setInterval(() => {
       const data = realtimeRef.current;
       const xv = x_output_channel ? data?.[x_output_channel] : data?.rpm;
       const yv = y_output_channel ? data?.[y_output_channel] : data?.map;
       if (xv === undefined || yv === undefined) return;
+      const now = Date.now();
       const cell: [number, number] = [nearest(xv, localXBins), nearest(yv, localYBins)];
       setHistoryTrail((prev) => {
-        const last = prev[prev.length - 1];
-        if (last && last[0] === cell[0] && last[1] === cell[1]) return prev;
-        return [...prev.slice(-49), cell];
+        const kept = prev.filter(([, , t]) => now - t < TRAIL_TTL_MS);
+        const last = kept[kept.length - 1];
+        if (last && last[0] === cell[0] && last[1] === cell[1]) {
+          return kept.length === prev.length ? prev : kept;
+        }
+        return [...kept.slice(-49), [cell[0], cell[1], now]];
       });
     }, 250);
     return () => clearInterval(interval);
@@ -1210,7 +1215,7 @@ export default function TableEditor2D({
           selectionRange={selectionRange}
           onSelectionChange={handleSelectionChange}
           onCellDoubleClick={handleCellDoubleClick}
-          historyTrail={showHistoryTrail ? historyTrail : []}
+          historyTrail={showHistoryTrail ? historyTrail.map(([x, y]) => [x, y] as [number, number]) : []}
           lockedCells={lockedCells}
           onCellLock={handleCellLock}
           // Live cursor - maps realtime values to table position
