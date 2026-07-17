@@ -1057,6 +1057,11 @@ body {
   bottom: 0;
   pointer-events: none;
   z-index: 100;
+  transition: opacity 0.8s ease-out;
+}
+
+.live-cursor-overlay--faded {
+  opacity: 0;
 }
 
 .live-cursor-marker {
