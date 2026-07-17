@@ -178,6 +178,8 @@ fn parse_command_string(
             .copied()
             .or_else(|| def.default_values.get(&var_name).map(|v| *v as u8))
             .or_else(|| def.pc_variables.get(&var_name).copied())
+            // Same last resort the UI display uses
+            .or_else(|| def.constants.get(&var_name).map(|c| c.min as u8))
             .unwrap_or(0);
         result.push(value);
     };
