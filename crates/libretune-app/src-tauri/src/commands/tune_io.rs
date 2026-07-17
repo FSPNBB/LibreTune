@@ -173,13 +173,15 @@ fn parse_command_string(
                 break;
             }
         }
+        // Same chain the UI displays: edited value, INI default, constant min.
+        // The legacy pc_variables map is parse-time zeros — only use it for
+        // names that aren't real constants.
         let value = current_values
             .get(&var_name)
             .copied()
             .or_else(|| def.default_values.get(&var_name).map(|v| *v as u8))
-            .or_else(|| def.pc_variables.get(&var_name).copied())
-            // Same last resort the UI display uses
             .or_else(|| def.constants.get(&var_name).map(|c| c.min as u8))
+            .or_else(|| def.pc_variables.get(&var_name).copied())
             .unwrap_or(0);
         result.push(value);
     };
