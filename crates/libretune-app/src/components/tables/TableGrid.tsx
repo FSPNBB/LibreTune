@@ -115,7 +115,8 @@ export default function TableGrid({
     const pos = liveCursorPosition;
     if (!pos) return;
     const last = lastCursorRef.current;
-    const moved = !last || Math.abs(last.x - pos.x) > 0.05 || Math.abs(last.y - pos.y) > 0.05;
+    // Quarter-cell threshold so sensor jitter doesn't keep the cursor alive
+    const moved = !last || Math.abs(last.x - pos.x) > 0.25 || Math.abs(last.y - pos.y) > 0.25;
     if (!moved) return;
     lastCursorRef.current = pos;
     setCursorFaded(false);
