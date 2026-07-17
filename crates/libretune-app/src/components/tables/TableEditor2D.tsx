@@ -192,7 +192,7 @@ export default function TableEditor2D({
     value: 0,
   });
 
-  const [followMode, setFollowMode] = useState(false);
+  const [followMode, setFollowMode] = useState(true);
   const [activeCell, setActiveCell] = useState<[number, number] | null>(null);
 
   const { showToast } = useToast();

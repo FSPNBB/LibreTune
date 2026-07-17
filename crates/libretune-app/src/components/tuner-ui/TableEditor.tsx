@@ -88,8 +88,8 @@ export function TableEditor({
   const tableRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   
-  // Follow mode state
-  const [followMode, setFollowMode] = useState(false);
+  // Follow mode state (on by default so open tables track the live cursor)
+  const [followMode, setFollowMode] = useState(true);
   const [historyTrail, setHistoryTrail] = useState<Array<{ row: number; col: number; time: number }>>([]);
   const TRAIL_DURATION_MS = 3000; // 3 second trail
   
