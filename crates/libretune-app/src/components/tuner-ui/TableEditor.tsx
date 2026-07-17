@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect, KeyboardEvent, useMemo } from
 import { useChannels } from '../../stores/realtimeStore';
 import { useHeatmapSettings } from '../../utils/useHeatmapSettings';
 import { contrastTextColor } from '../../utils/heatmapColors';
-import { useTableYAxisBottom } from '../../utils/useTableOrientation';
+import { useTableYAxisBottom, useTrailFadeSec } from '../../utils/useTableOrientation';
 import './TableEditor.css';
 import TableEditor3D from '../tables/TableEditor3D';
 import TableToolbar from './table-editor/TableToolbar';
@@ -92,7 +92,8 @@ export function TableEditor({
   // Follow mode state (on by default so open tables track the live cursor)
   const [followMode, setFollowMode] = useState(true);
   const [historyTrail, setHistoryTrail] = useState<Array<{ row: number; col: number; time: number }>>([]);
-  const TRAIL_DURATION_MS = 3000; // 3 second trail
+  const trailFadeSec = useTrailFadeSec();
+  const TRAIL_DURATION_MS = trailFadeSec > 0 ? trailFadeSec * 1000 : Infinity;
   
   // Context menu state
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({ x: 0, y: 0, visible: false });

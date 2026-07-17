@@ -68,11 +68,6 @@ export default function TableGrid({
   const y_size = y_bins.length;
 
   // Calculate live cursor position (fractional cell indices)
-  // Fade the cursor after the operating point sits still for a while
-  const [cursorFaded, setCursorFaded] = useState(false);
-  const lastCursorRef = useRef<{ x: number; y: number } | null>(null);
-  const fadeTimerRef = useRef<number | null>(null);
-
   const liveCursorPosition = useMemo(() => {
     if (!showLiveCursor || liveCursorX === undefined || liveCursorY === undefined) {
       return null;
@@ -110,23 +105,6 @@ export default function TableGrid({
 
     return { x: xPos, y: yPos };
   }, [showLiveCursor, liveCursorX, liveCursorY, x_bins, y_bins]);
-
-  useLayoutEffect(() => {
-    const pos = liveCursorPosition;
-    if (!pos) return;
-    const last = lastCursorRef.current;
-    // Quarter-cell threshold so sensor jitter doesn't keep the cursor alive
-    const moved = !last || Math.abs(last.x - pos.x) > 0.25 || Math.abs(last.y - pos.y) > 0.25;
-    if (!moved) return;
-    lastCursorRef.current = pos;
-    setCursorFaded(false);
-    if (fadeTimerRef.current) window.clearTimeout(fadeTimerRef.current);
-    fadeTimerRef.current = window.setTimeout(() => setCursorFaded(true), 3000);
-  }, [liveCursorPosition]);
-
-  useLayoutEffect(() => () => {
-    if (fadeTimerRef.current) window.clearTimeout(fadeTimerRef.current);
-  }, []);
 
   const getCellColor = useCallback((value: number, x: number, y: number) => {
     const cellKey = `${x},${y}`;
@@ -480,7 +458,7 @@ export default function TableGrid({
       {liveCursorPosition && cellMetrics && (() => {
         const c = cellCenter(liveCursorPosition.x, liveCursorPosition.y);
         return c && (
-          <div className={`live-cursor-overlay${cursorFaded ? ' live-cursor-overlay--faded' : ''}`}>
+          <div className="live-cursor-overlay">
             <div className="live-cursor-marker" style={{ left: c.cx, top: c.cy }} />
           </div>
         );

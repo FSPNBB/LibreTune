@@ -43,6 +43,33 @@ export function useTableAccentColorVars(): void {
   }, []);
 }
 
+/** Trail point lifetime in seconds (0 = never expire) */
+export function useTrailFadeSec(): number {
+  const [sec, setSec] = useState(8);
+  useEffect(() => {
+    const load = () => {
+      invoke<{ table_trail_fade_sec?: number }>('get_settings')
+        .then((s) => setSec(s?.table_trail_fade_sec ?? 8))
+        .catch(() => {});
+    };
+    load();
+    let unlisten: UnlistenFn | null = null;
+    (async () => {
+      try {
+        unlisten = await listen<string>('settings:changed', (e) => {
+          if (e.payload === 'table_trail_fade_sec') load();
+        });
+      } catch {
+        // Not running under Tauri
+      }
+    })();
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, []);
+  return sec;
+}
+
 export function useTableYAxisBottom(): boolean {
   const [bottom, setBottom] = useState(false);
 

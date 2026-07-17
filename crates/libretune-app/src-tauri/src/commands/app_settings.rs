@@ -45,6 +45,10 @@ pub(crate) struct Settings {
     #[serde(default)]
     pub(crate) table_trail_color: String,
 
+    /// Seconds before trail points expire (0 = never)
+    #[serde(default = "default_trail_fade_sec")]
+    pub(crate) table_trail_fade_sec: f64,
+
     // Heatmap color scheme settings
     #[serde(default = "default_heatmap_scheme")]
     pub(crate) heatmap_value_scheme: String, // Scheme for VE/timing tables
@@ -122,6 +126,10 @@ pub(crate) fn default_runtime_packet_mode() -> String {
 
 fn default_heatmap_scheme() -> String {
     "tunerstudio".to_string()
+}
+
+fn default_trail_fade_sec() -> f64 {
+    8.0
 }
 
 fn default_true() -> bool {

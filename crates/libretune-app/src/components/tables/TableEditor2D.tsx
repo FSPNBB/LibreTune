@@ -9,7 +9,7 @@ import RebinDialog from '../dialogs/RebinDialog';
 import CellEditDialog from '../dialogs/CellEditDialog';
 import LambdaPreviewTable from './LambdaPreviewTable';
 import { useHeatmapSettings } from '../../utils/useHeatmapSettings';
-import { useTableYAxisBottom } from '../../utils/useTableOrientation';
+import { useTableYAxisBottom, useTrailFadeSec } from '../../utils/useTableOrientation';
 import { useChannels } from '../../stores/realtimeStore';
 import { useToast } from '../../contexts/ToastContext';
 import { getHotkeyManager } from '../../services/hotkeyService';
@@ -204,6 +204,7 @@ export default function TableEditor2D({
   // Get heatmap scheme from user settings
   const { settings: heatmapSettings } = useHeatmapSettings();
   const yAxisBottom = useTableYAxisBottom();
+  const trailFadeSec = useTrailFadeSec();
 
   // Show the read-only lambda companion only for actual target-AFR tables
   // (not blend/bias tables whose values aren't AFR).
@@ -357,7 +358,7 @@ export default function TableEditor2D({
       });
       return best;
     };
-    const TRAIL_TTL_MS = 8000;
+    const ttlMs = trailFadeSec > 0 ? trailFadeSec * 1000 : Infinity;
     const interval = setInterval(() => {
       const data = realtimeRef.current;
       const xv = x_output_channel ? data?.[x_output_channel] : data?.rpm;
@@ -366,7 +367,7 @@ export default function TableEditor2D({
       const now = Date.now();
       const cell: [number, number] = [nearest(xv, localXBins), nearest(yv, localYBins)];
       setHistoryTrail((prev) => {
-        const kept = prev.filter(([, , t]) => now - t < TRAIL_TTL_MS);
+        const kept = prev.filter(([, , t]) => now - t < ttlMs);
         const last = kept[kept.length - 1];
         if (last && last[0] === cell[0] && last[1] === cell[1]) {
           return kept.length === prev.length ? prev : kept;
@@ -375,7 +376,7 @@ export default function TableEditor2D({
       });
     }, 250);
     return () => clearInterval(interval);
-  }, [followMode, x_output_channel, y_output_channel, localXBins, localYBins]);
+  }, [followMode, x_output_channel, y_output_channel, localXBins, localYBins, trailFadeSec]);
 
   // Keyboard event handling for TS-style hotkeys
   useEffect(() => {
