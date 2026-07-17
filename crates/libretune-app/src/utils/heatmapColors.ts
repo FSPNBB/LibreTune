@@ -244,6 +244,28 @@ export function getGradientColor(stops: string[], position: number): RGBColor {
  * @param scheme - Color scheme to use (or custom stops array)
  * @returns CSS color string
  */
+/** Black or white text depending on background luminance. Accepts #rrggbb or
+ *  rgb(...) strings; returns undefined for anything else (CSS default wins). */
+export function contrastTextColor(background: string): string | undefined {
+  let r: number, g: number, b: number;
+  const hex = /^#([0-9a-f]{6})$/i.exec(background.trim());
+  const rgb = /^rgba?\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i.exec(background.trim());
+  if (hex) {
+    const n = parseInt(hex[1], 16);
+    r = (n >> 16) & 255;
+    g = (n >> 8) & 255;
+    b = n & 255;
+  } else if (rgb) {
+    r = +rgb[1];
+    g = +rgb[2];
+    b = +rgb[3];
+  } else {
+    return undefined;
+  }
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return lum > 0.55 ? '#111418' : '#ffffff';
+}
+
 export function valueToHeatmapColor(
   value: number,
   min: number,

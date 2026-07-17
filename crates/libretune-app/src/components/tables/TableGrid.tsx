@@ -1,5 +1,5 @@
 import { Fragment, useState, useRef, useMemo, useCallback, useLayoutEffect } from 'react';
-import { valueToHeatmapColor, HeatmapScheme } from '../../utils/heatmapColors';
+import { valueToHeatmapColor, contrastTextColor, HeatmapScheme } from '../../utils/heatmapColors';
 
 export interface SelectionRange {
   start: [number, number];
@@ -125,7 +125,7 @@ export default function TableGrid({
 
     // Use centralized heatmap utility
     const color = valueToHeatmapColor(value, minVal, maxVal, heatmapScheme);
-    return { background: color };
+    return { background: color, color: contrastTextColor(color) };
   }, [lockedCells, showColorShade, z_values, heatmapScheme]);
 
   const handleKeyDown = (e: KeyboardEvent, x: number, y: number) => {

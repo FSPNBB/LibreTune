@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect, KeyboardEvent, useMemo } from 'react';
 import { useChannels } from '../../stores/realtimeStore';
 import { useHeatmapSettings } from '../../utils/useHeatmapSettings';
+import { contrastTextColor } from '../../utils/heatmapColors';
 import { useTableYAxisBottom } from '../../utils/useTableOrientation';
 import './TableEditor.css';
 import TableEditor3D from '../tables/TableEditor3D';
@@ -925,8 +926,9 @@ export function TableEditor({
                     <td
                       key={colIndex}
                       className={`table-cell ${isSelected ? 'selected' : ''} ${isLive ? 'live' : ''} ${isInTrail ? 'trail' : ''}`}
-                      style={{ 
+                      style={{
                         backgroundColor: getValueColor(value),
+                        color: contrastTextColor(getValueColor(value)),
                         ...(isInTrail && { '--trail-opacity': trailOpacity } as React.CSSProperties)
                       }}
                       onMouseDown={(e) => handleCellMouseDown(rowIndex, colIndex, e)}
