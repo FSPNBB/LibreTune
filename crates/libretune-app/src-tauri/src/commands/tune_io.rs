@@ -100,7 +100,12 @@ pub async fn resolve_controller_command(
 
     let def_guard = state.definition.lock().await;
     let def = def_guard.as_ref().ok_or("No INI definition loaded")?;
-    resolve_command_bytes(def, command_name, &current, &mut std::collections::HashSet::new())
+    resolve_command_bytes(
+        def,
+        command_name,
+        &current,
+        &mut std::collections::HashSet::new(),
+    )
 }
 
 /// Send pre-resolved controller command bytes to the connected ECU.
